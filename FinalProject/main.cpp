@@ -145,12 +145,60 @@ void measureFPS()
     cv::destroyAllWindows();
 }
 
+void testingSIFT()
+{
+    cv::Mat board_img = cv::imread("main_monopoly_picture.jpg", cv::IMREAD_GRAYSCALE);
+    cv::Mat scene_img = cv::imread("SIFT_testing_picture_monopoly.jpg", cv::IMREAD_GRAYSCALE);
+
+    // Create SIFT detector
+    cv::Ptr<cv::SIFT> sift = cv::SIFT::create();
+
+    // Detect keypoints and compute descriptors
+    std::vector<cv::KeyPoint> kp1, kp2; //list of keypoints in each image
+    cv::Mat des1, des2;
+    sift->detectAndCompute(board_img, cv::noArray(), kp1, des1);
+    sift->detectAndCompute(scene_img, cv::noArray(), kp2, des2);
+
+    // Match features using FLANN
+    cv::FlannBasedMatcher matcher;
+    std::vector<cv::DMatch> matches;
+    matcher.match(des1, des2, matches);
+
+    // Keep only the best matches
+    std::sort(matches.begin(), matches.end(), [](const cv::DMatch& a, const cv::DMatch& b) {
+        return a.distance < b.distance;
+    });
+    std::vector<cv::DMatch> good_matches(matches.begin(), matches.begin() + 50);
+
+    if (good_matches.size() > 10) {  // Ensure enough matches
+        std::vector<cv::Point2f> src_pts, dst_pts;
+        for (auto& match : good_matches) {
+            src_pts.push_back(kp1[match.queryIdx].pt);
+            dst_pts.push_back(kp2[match.trainIdx].pt);
+        }
+
+        // Compute homography
+        cv::Mat M = cv::findHomography(src_pts, dst_pts, cv::RANSAC);
+
+        if (!M.empty()) {
+            // Warp the scene to align the board correctly
+            cv::Mat aligned_board;
+            cv::warpPerspective(scene_img, aligned_board, M, board_img.size());
+
+            cv::imshow("Warped Monopoly Board", aligned_board);
+            cv::waitKey(0);
+        }
+    }
+
+}
+
 int main()
 {
-    // takeASinglePicture();
-    takeASingleVideo();
+    //takeASinglePicture();
+    // takeASingleVideo();
     // measureFPS();
     // cout << "OpenCV Version: " << CV_VERSION << std::endl;
+    testingSIFT();
     return 0;
 }
 
