@@ -251,6 +251,15 @@ FinalProject_IS_TOP_LEVEL:STATIC=ON
 //Value Computed by CMake
 FinalProject_SOURCE_DIR:STATIC=C:/Users/RyanA/CLionProjects/Advanced_CV/FinalProject/AdvancedCV/FinalProject
 
+//Value Computed by CMake
+HW1_BINARY_DIR:STATIC=C:/Users/RyanA/CLionProjects/Advanced_CV/FinalProject/AdvancedCV/FinalProject/cmake-build-debug
+
+//Value Computed by CMake
+HW1_IS_TOP_LEVEL:STATIC=ON
+
+//Value Computed by CMake
+HW1_SOURCE_DIR:STATIC=C:/Users/RyanA/CLionProjects/Advanced_CV/FinalProject/AdvancedCV/FinalProject
+
 
 ########################
 # INTERNAL cache entries
@@ -410,6 +419,8 @@ CMAKE_STRIP-ADVANCED:INTERNAL=1
 CMAKE_TAPI-ADVANCED:INTERNAL=1
 //ADVANCED property for variable: CMAKE_VERBOSE_MAKEFILE
 CMAKE_VERBOSE_MAKEFILE-ADVANCED:INTERNAL=1
+//Details about finding OpenCV
+FIND_PACKAGE_MESSAGE_DETAILS_OpenCV:INTERNAL=[C:/OpenCVforCplusplus/opencv/build][v4.5.5()]
 //linker supports push/pop state
 _CMAKE_LINKER_PUSHPOP_STATE_SUPPORTED:INTERNAL=TRUE
 

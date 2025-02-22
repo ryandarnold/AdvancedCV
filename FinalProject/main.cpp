@@ -1,22 +1,26 @@
 #include <iostream>
+#include <opencv2/opencv.hpp>
 
 // TIP To <b>Run</b> code, press <shortcut actionId="Run"/> or
 // click the <icon src="AllIcons.Actions.Execute"/> icon in the gutter.
 int main()
 {
-    // TIP Press <shortcut actionId="RenameElement"/> when your caret is at the
-    // <b>lang</b> variable name to see how CLion can help you rename it.
-    auto lang = "C++";
-    std::cout << "Hello and welcome to " << lang << "!\n";
+    cv::Mat image = cv::imread("../camel_hehe.jpg"); // Replace with your image path
 
-    for (int i = 1; i <= 5; i++)
-    {
-        // TIP Press <shortcut actionId="Debug"/> to start debugging your code.
-        // We have set one <icon src="AllIcons.Debugger.Db_set_breakpoint"/>
-        // breakpoint for you, but you can always add more by pressing
-        // <shortcut actionId="ToggleLineBreakpoint"/>.
-        std::cout << "i = " << i << std::endl;
+    // Check if the image was loaded properly
+    if (image.empty()) {
+        std::cerr << "Error: Unable to load image." << std::endl;
     }
+
+    // Resize image to 50% of its original size
+    cv::Mat resized_image;
+    cv::resize(image, resized_image, cv::Size(), 0.5, 0.5, cv::INTER_AREA);
+
+    // Display the image
+    cv::imshow("Image", resized_image);
+
+    // Wait for a key press and close the window
+    cv::waitKey(0);
 
     return 0;
 }
