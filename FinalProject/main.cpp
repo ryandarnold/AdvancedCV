@@ -145,10 +145,21 @@ void measureFPS()
     cv::destroyAllWindows();
 }
 
+void display_image(cv::Mat original_image, double Scale, string window_name)
+{
+    cv::Mat resized_frame;
+    cv::resize(original_image, resized_frame, cv::Size(), Scale, Scale, cv::INTER_AREA);
+    cv::imshow(window_name, resized_frame);
+    cv::waitKey(0);
+}
+
 void testingSIFT()
 {
-    cv::Mat board_img = cv::imread("main_monopoly_picture.jpg", cv::IMREAD_GRAYSCALE);
-    cv::Mat scene_img = cv::imread("SIFT_testing_picture_monopoly.jpg", cv::IMREAD_GRAYSCALE);
+
+    cv::Mat board_img = cv::imread("../../../main_monopoly_picture.jpg", cv::IMREAD_COLOR);
+    // display_image(board_img, 0.6, "original board image");
+    cv::Mat scene_img = cv::imread("../../../SIFT_testing_picture_monopoly.jpg", cv::IMREAD_COLOR);
+    // display_image(scene_img, 0.6, "SIFT testing image");
 
     // Create SIFT detector
     cv::Ptr<cv::SIFT> sift = cv::SIFT::create();
@@ -189,7 +200,6 @@ void testingSIFT()
             cv::waitKey(0);
         }
     }
-
 }
 
 int main()
@@ -202,7 +212,3 @@ int main()
     return 0;
 }
 
-// TIP See CLion help at <a
-// href="https://www.jetbrains.com/help/clion/">jetbrains.com/help/clion/</a>.
-//  Also, you can try interactive lessons for CLion by selecting
-//  'Help | Learn IDE Features' from the main menu.
