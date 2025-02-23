@@ -7,6 +7,6 @@ set(OpenCV_DIR "C:/OpenCVforCplusplus/opencv/build/x64/mingw/lib")
 find_package(OpenCV REQUIRED)
 include_directories(${OpenCV_INCLUDE_DIRS})
 
-add_executable(FinalProject main.cpp)
-#set(OpenCV_LIBS opencv_core opencv_imgproc opencv_highgui opencv_imgcodecs)
+add_executable(FinalProject main.cpp
+        extraFunctions.cpp)
 target_link_libraries(FinalProject ${OpenCV_LIBS})
