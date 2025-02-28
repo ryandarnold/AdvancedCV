@@ -31,6 +31,7 @@ void part2()
     // cout << "ms delay between frames: " << delay_between_frames << endl;
 
     // Create background subtractor (MOG2)
+    //creates a smart pointer that allocates and deallocates memory for you (no need to call delete)
     cv::Ptr<cv::BackgroundSubtractorMOG2> bgSubtractor = cv::createBackgroundSubtractorMOG2();
 
     cv::Mat fgMask, background;
@@ -42,7 +43,8 @@ void part2()
         cap >> frame;
         if (frame.empty()) break;
 
-        bgSubtractor->apply(frame, fgMask); // Apply background subtraction
+        // Apply background subtraction
+        bgSubtractor->apply(frame, fgMask); //white = foreground, black = background
 
         bgSubtractor->getBackgroundImage(background); // Get the background model
 
@@ -51,14 +53,15 @@ void part2()
         display_video_frame(fgMask, 0.5, "Foreground Mask");
 
         if (!background.empty()) {
-            // cv::imshow("Background Model", background);
+            //display background frame/image as it updates
             display_video_frame(background, 0.5, "Background Model");
         }
 
         if (cv::waitKey(33) >= 0) break; //hardcoded 33ms delay between frames
     }
-    // Save the background image
+
     if (!background.empty()) {
+        // Save the background image
         cv::imwrite("../background.jpg", background);
         std::cout << "Background image saved as background.jpg" << std::endl;
     }
@@ -130,12 +133,11 @@ void part3()
     cv::destroyAllWindows();
 
     std::cout << "Output video saved as DrKinsman_noBackground.avi" << std::endl;
-
 }
 
 int main()
 {
-    // part2();
+    //part2();
     part3();
 
     return 0;
