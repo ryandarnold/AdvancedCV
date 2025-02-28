@@ -73,7 +73,7 @@ void part3()
     // Open the input video
     cv::VideoCapture cap("../../../Walking_through_Back_Yard.mp4");
 
-    // Create Background Subtractor
+    // Create Background Subtractor smart pointer
     cv::Ptr<cv::BackgroundSubtractorMOG2> bgSubtractor = cv::createBackgroundSubtractorMOG2();
 
     // Get frame properties
@@ -94,19 +94,21 @@ void part3()
         bgSubtractor->apply(frame, fgMask);
 
         // Create a new background (Choose color: Green [0,255,0], Blue [255,0,0], or Gray [128,128,128])
+        //size is the size of the original input frame, type is the type of the frame, and Scalar is the color
         cv::Mat newBackground(frame.size(), frame.type(), cv::Scalar(0, 255, 0)); // Green background
 
-        // Convert mask to 3 channels to match frame format
+        // Convert mask to 3 channels because the mask is a single gray channel :(
         cv::Mat fgMask3Ch;
         cv::cvtColor(fgMask, fgMask3Ch, cv::COLOR_GRAY2BGR);
 
-        // Extract foreground using the mask
+        // uses 'fgMask' as a mask on the current 'frame' and stores the result in 'processedFrame'
         frame.copyTo(processedFrame, fgMask); // Keep only foreground pixels
 
         // Replace background where mask is black
         for (int i = 0; i < frame.rows; i++) {
             for (int j = 0; j < frame.cols; j++) {
-                if (fgMask.at<uchar>(i, j) == 0) { // Background detected
+                if (fgMask.at<uchar>(i, j) == 0) { //if the current mask is a background pixel (0 for black)
+                    //cv::Vec3B tells OpenCV to treat the pixel as a 3 channel pixel instead of gray/single channel
                     processedFrame.at<cv::Vec3b>(i, j) = newBackground.at<cv::Vec3b>(i, j);
                 }
             }
@@ -116,16 +118,14 @@ void part3()
         outputVideo.write(processedFrame);
 
         // Display
-        //cv::imshow("Original Frame", frame);
         display_video_frame(frame, 0.5, "Original Frame");
-        //cv::imshow("Foreground Mask", fgMask);
         display_video_frame(fgMask, 0.5, "Foreground Mask");
         cv::imshow("Processed Video", processedFrame);
         display_video_frame(processedFrame, 0.5, "Processed Video");
 
 
         // Press 'q' to exit early
-        if (cv::waitKey(30) >= 0) break;
+        if (cv::waitKey(33) >= 0) break;
     }
 
     cap.release();
