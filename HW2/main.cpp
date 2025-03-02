@@ -16,19 +16,14 @@ void display_video_frame(cv::Mat original_image, double Scale, string window_nam
     cv::Mat resized_frame;
     cv::resize(original_image, resized_frame, cv::Size(), Scale, Scale, cv::INTER_AREA);
     cv::imshow(window_name, resized_frame);
-    // cv::waitKey(0);
 }
 
 void part2()
 {
-    //
     //step 1: open the video
     cv::VideoCapture cap;
     cap.open("../../../Walking_through_Back_Yard.mp4");
     double fps = cap.get(cv::CAP_PROP_FPS);
-    // std::cout << "Frame rate (FPS): " << fps << std::endl;
-    int delay_between_frames = round(1000.0 / fps);
-    // cout << "ms delay between frames: " << delay_between_frames << endl;
 
     // Create background subtractor (MOG2)
     //creates a smart pointer that allocates and deallocates memory for you (no need to call delete)
@@ -37,7 +32,6 @@ void part2()
     cv::Mat fgMask, background;
 
     cv::Mat frame;
-    double Scale = 0.6;
     while (true)
     {   //runs the video in a loop
         cap >> frame;
@@ -47,7 +41,6 @@ void part2()
         bgSubtractor->apply(frame, fgMask); //white = foreground, black = background
 
         bgSubtractor->getBackgroundImage(background); // Get the background model
-
 
         display_video_frame(frame, 0.5, "Original Frame");
         display_video_frame(fgMask, 0.5, "Foreground Mask");
@@ -74,9 +67,10 @@ void part3()
     cv::VideoCapture cap("../../../Walking_through_Back_Yard.mp4");
 
     // Create Background Subtractor smart pointer
-    cv::Ptr<cv::BackgroundSubtractorMOG2> bgSubtractor = cv::createBackgroundSubtractorMOG2();
+    cv::Ptr<cv::BackgroundSubtractorMOG2> bgSubtractor = cv::createBackgroundSubtractorMOG2(300,
+    15,true);
 
-    // Get frame properties
+    // Get frame info to save the video
     int frame_width = static_cast<int>(cap.get(cv::CAP_PROP_FRAME_WIDTH));
     int frame_height = static_cast<int>(cap.get(cv::CAP_PROP_FRAME_HEIGHT));
     double fps = cap.get(cv::CAP_PROP_FPS);
@@ -90,16 +84,22 @@ void part3()
         cap >> frame; // Read frame
         if (frame.empty()) break; // Break at end of video
 
-        // Apply background subtraction
+        // Apply main background subtraction
         bgSubtractor->apply(frame, fgMask);
 
-        // Create a new background (Choose color: Green [0,255,0], Blue [255,0,0], or Gray [128,128,128])
+        // elliptical kernel creation
+        cv::Mat kernel = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(3, 3));
+
+        // Close holes in the foreground (helps fill missing parts of objects)
+        cv::morphologyEx(fgMask, fgMask, cv::MORPH_CLOSE, kernel);
+
+        // Create a new background Green is [0,255,0]
         //size is the size of the original input frame, type is the type of the frame, and Scalar is the color
         cv::Mat newBackground(frame.size(), frame.type(), cv::Scalar(0, 255, 0)); // Green background
 
         // Convert mask to 3 channels because the mask is a single gray channel :(
-        cv::Mat fgMask3Ch;
-        cv::cvtColor(fgMask, fgMask3Ch, cv::COLOR_GRAY2BGR);
+        // cv::Mat fgMask3Ch;
+        // cv::cvtColor(fgMask, fgMask3Ch, cv::COLOR_GRAY2BGR);
 
         // uses 'fgMask' as a mask on the current 'frame' and stores the result in 'processedFrame'
         frame.copyTo(processedFrame, fgMask); // Keep only foreground pixels
@@ -109,6 +109,7 @@ void part3()
             for (int j = 0; j < frame.cols; j++) {
                 if (fgMask.at<uchar>(i, j) == 0) { //if the current mask is a background pixel (0 for black)
                     //cv::Vec3B tells OpenCV to treat the pixel as a 3 channel pixel instead of gray/single channel
+                    //replace the pixel with the new background pixel
                     processedFrame.at<cv::Vec3b>(i, j) = newBackground.at<cv::Vec3b>(i, j);
                 }
             }
@@ -123,9 +124,7 @@ void part3()
         cv::imshow("Processed Video", processedFrame);
         display_video_frame(processedFrame, 0.5, "Processed Video");
 
-
-        // Press 'q' to exit early
-        if (cv::waitKey(33) >= 0) break;
+        if (cv::waitKey(25) >= 0) break; //33 for 30fps, 25 for faster playback (but doesn't really work)
     }
 
     cap.release();
@@ -138,7 +137,7 @@ void part3()
 int main()
 {
     //part2();
-    part3();
+    //part3();
 
     return 0;
 }
