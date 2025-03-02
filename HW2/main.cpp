@@ -99,7 +99,6 @@ void part3()
 
         // Convert mask to 3 channels because the mask is a single gray channel :(
         // cv::Mat fgMask3Ch;
-        // cv::cvtColor(fgMask, fgMask3Ch, cv::COLOR_GRAY2BGR);
 
         // uses 'fgMask' as a mask on the current 'frame' and stores the result in 'processedFrame'
         frame.copyTo(processedFrame, fgMask); // Keep only foreground pixels
