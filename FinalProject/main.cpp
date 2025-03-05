@@ -224,13 +224,24 @@ int main()
     */
 
     //but first need to calibrate the camera so the board looks like a perfect rectangle
-    // findCameraDetails();
-    // string distoredImagePath = "../../../main_monopoly_picture.jpg";
+    findCameraDetails();
+    string distoredImagePath = "../../../updatedMainMonopolyImage.jpg";
+    cv::Mat undistorted_img = undistortImage(distoredImagePath);
+    display_image(undistorted_img, 0.6, "Undistorted Image");
+    cv::destroyWindow("Undistorted Image");
+
+
+    // takeMultiplePictures("../../../calibration_images/", CAMERA_INDEX, "imageHAHA", 10);
+
+
+
+    // string singlePicturePath = "../";
+    // takeASinglePicture(singlePicturePath, CAMERA_INDEX,"updatedMainMonopolyImage");
+    //
+    // string distoredImagePath = "../updatedMainMonopolyImage.jpg";
     // cv::Mat undistorted_img = undistortImage(distoredImagePath);
     // display_image(undistorted_img, 0.6, "Undistorted Image");
     // cv::destroyWindow("Undistorted Image");
-
-
 
     // string main_monopoly_pic = "../../../main_monopoly_picture.jpg";
     // string scene_image = "../../../SIFT_testing_picture_monopoly.jpg";
