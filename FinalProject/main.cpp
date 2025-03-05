@@ -2,6 +2,7 @@
 #include <opencv2/opencv.hpp>
 #include <chrono>
 #include "extraFunctions.h"
+#include <tuple>
 /*I have OpenCV version 4.5.5-dev
 */
 
@@ -192,6 +193,9 @@ void findCameraDetails()
 
 cv::Mat undistortImage(string distorted_image_path)
 {
+    //TODO: only call this function once, and then output the camera_matrix and dist_coeffs to the calling function
+    // because accessing file storage will be really slow if you do it at 30fps
+
     // Load calibration parameters
     cv::FileStorage fs("../camera_calibration.yml", cv::FileStorage::READ);
     cv::Mat camera_matrix, dist_coeffs;
