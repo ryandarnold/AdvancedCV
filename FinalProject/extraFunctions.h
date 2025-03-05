@@ -6,10 +6,13 @@
 #define EXTRAFUNCTIONS_H
 
 #endif //EXTRAFUNCTIONS_H
+#include <iostream>
+using namespace std;
 
-void takeASinglePicture();
-void takeASingleVideo();
+void takeMultiplePictures(string cameraCalibration_path, int CAMERA_INDEX, string imageName, int numImages);
+void takeASinglePicture(string cameraCalibration_path, int CAMERA_INDEX, string imageName);
+void takeASingleVideo(int CAMERA_INDEX);
 void gettingSingleFrameFromAngledVideo();
-void measureFPS();
+void measureFPS(int CAMERA_INDEX);
 
 

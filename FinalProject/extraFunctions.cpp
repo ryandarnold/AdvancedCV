@@ -4,11 +4,26 @@
 #include <chrono>
 using namespace std;
 
-extern int CAMERA_INDEX;
 
 
-void takeASinglePicture()
+void takeMultiplePictures(string cameraCalibration_path, int CAMERA_INDEX, string imageName, int numImages)
 {
+    // string cameraCalibration_path = "../../../calibration_images/"; //all .jpg images in folder
+    // string imageName = "imageHEHE";
+    // takeMultiplePictures(cameraCalibration_path, CAMERA_INDEX, imageName, 10);
+    cout << "starting to take multiple pictures" << endl;
+    for (int i = 0; i < numImages; i++)
+    {
+        takeASinglePicture(cameraCalibration_path, CAMERA_INDEX, imageName + to_string(i));
+        cout << "finished taking picture: " << i << endl;
+    }
+
+}
+
+
+void takeASinglePicture(string cameraCalibration_path, int CAMERA_INDEX, string imageName)
+{
+    cout << "camera index: " + CAMERA_INDEX << endl;
     cv::VideoCapture cap(CAMERA_INDEX); // Open the default camera (0 for the first camera)
     std::cout << "Current Width: " << cap.get(cv::CAP_PROP_FRAME_WIDTH) << std::endl;
     std::cout << "Current Height: " << cap.get(cv::CAP_PROP_FRAME_HEIGHT) << std::endl;
@@ -37,7 +52,8 @@ void takeASinglePicture()
         // Wait for a key press (1 ms delay), and capture image if any key is pressed
         int key = cv::waitKey(1);
         if (key >= 0) {  // Any key pressed
-            string filename = "../captured_image_" + std::to_string(imageCount) + ".jpg"; //maybe change to .png
+            // string filename = "../captured_image_" + std::to_string(imageCount) + ".jpg"; //maybe change to .png
+            string filename = cameraCalibration_path + imageName + ".jpg";
             cv::imwrite(filename, frame); // Save image
             cout << "Image saved as: " << filename << std::endl;
             imageCount++; // Increment image counter
@@ -51,7 +67,7 @@ void takeASinglePicture()
 }
 
 
-void takeASingleVideo()
+void takeASingleVideo(int CAMERA_INDEX)
 {
     cv::VideoCapture cap(CAMERA_INDEX); // Open the default camera (0 for the first camera)
     cv::VideoWriter writer;
@@ -144,7 +160,7 @@ void gettingSingleFrameFromAngledVideo()
     }
 }
 
-void measureFPS()
+void measureFPS(int CAMERA_INDEX)
 {
     cv::VideoCapture cap(CAMERA_INDEX); // Open default camera
     cv::Mat frame;
