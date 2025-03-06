@@ -131,10 +131,12 @@ void liveVideoOfMonopolyBoard(cv::Mat camera_matrix, cv::Mat dist_coeffs)
 
 int main()
 {
-    //TODO: note to myself: i think there are too many transformations trying to undo the barrel distortion
-    //TODO: and then doing SIFT, on BOTH distorted images. I think I just need to undistort the main board image
-    //TODO: but ONLY when about to display to the user
-    //TODO: actually, my shit looked good without
+    //TODO: 1) note to myself: I still need to test the SIFT at 30FPS and make sure it doesn't lag
+    //      and if it does lag, then try only doing SIFT every 5 frames or something
+    //TODO: 2) still need to take pictures of each of the game board pieces and see if SIFT can detect them
+    //TODO: 3) then if SIFT can detect the pieces, then need to find the locations (x,y) of each specific piece
+    //TODO: 4) then need to make some graphics on screen that will show the user the locations of each piece
+    //      relative to the game board so it becomes real-time tracking of game pieces
 
     /* maybe try implementing background subtraction so when the game pieces are moved around
     the pieces are shown as the foreground mask, which makes it easier to know the potential locations of the pieces
