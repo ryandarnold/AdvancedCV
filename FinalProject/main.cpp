@@ -63,9 +63,7 @@ cv::Mat testingSIFT(string board_template_name, string scene_image_name)
     cv::Mat M = cv::findHomography(dst_pts, src_pts, cv::RANSAC);
 
     if (M.empty()) {
-        // std::cout << "Error: Homography computation failed!" << std::endl;
         throw std::invalid_argument("Error: Homography computation failed!");
-        // return;
     }
 
     // Warp the second image to align with the original board image
@@ -191,7 +189,8 @@ void findCameraDetails()
 
 }
 
-cv::Mat undistortImage(string distorted_image_path)
+// cv::Mat undistortImage(string distorted_image_path)
+tuple<cv::Mat, cv::Mat> undistortImage(string distorted_image_path)
 {
     //TODO: only call this function once, and then output the camera_matrix and dist_coeffs to the calling function
     // because accessing file storage will be really slow if you do it at 30fps
@@ -210,11 +209,54 @@ cv::Mat undistortImage(string distorted_image_path)
     }
 
     // Undistort the image
-    cv::Mat undistorted_img;
-    cv::undistort(distorted_img, undistorted_img, camera_matrix, dist_coeffs);
+    // cv::Mat undistorted_img;
+    // cv::undistort(distorted_img, undistorted_img, camera_matrix, dist_coeffs);
 
-    return undistorted_img;
+    // return undistorted_img;
+    return {camera_matrix, dist_coeffs};
 }
+
+void testVideoWithUndistortingEachFrame(cv::Mat camera_matrix, cv::Mat dist_coeffs)
+{
+    cv::VideoCapture cap(CAMERA_INDEX); // Open the default camera (0 for the first camera)
+
+    cap.set(cv::CAP_PROP_FRAME_WIDTH, 1024);
+    cap.set(cv::CAP_PROP_FRAME_HEIGHT, 768); // worked very well
+    cap.set(cv::CAP_PROP_FPS, 30);
+    int frame_width = static_cast<int>(cap.get(cv::CAP_PROP_FRAME_WIDTH));
+    int frame_height = static_cast<int>(cap.get(cv::CAP_PROP_FRAME_HEIGHT));
+    double fps = cap.get(cv::CAP_PROP_FPS);
+    std::cout << "Camera FPS: " << fps << std::endl;
+
+
+    bool recording = false;
+    cv::Mat frame;
+    cv::Mat undistorted_frame;
+    while (true) {
+        cap >> frame; // new frame into frame matrix
+        cv::undistort(frame, undistorted_frame, camera_matrix, dist_coeffs);
+        cv::imshow("Live Camera Feed", undistorted_frame);
+
+
+        // Check if any key is pressed
+        int key = cv::waitKey(1);
+        if (key >= 0) { // Any key detected
+            if (recording == false) {
+                std::string filename = "../recorded_video.avi";
+                std::cout << "Recording started..." << std::endl;
+                recording = true;
+            } else {
+                recording = false;
+                break;
+            }
+
+        }
+
+    }
+    cap.release(); // Release the camera
+    cv::destroyAllWindows(); // Close OpenCV windows
+}
+
 
 int main()
 {
@@ -224,11 +266,19 @@ int main()
     */
 
     //but first need to calibrate the camera so the board looks like a perfect rectangle
-    findCameraDetails();
-    string distoredImagePath = "../../../updatedMainMonopolyImage.jpg";
-    cv::Mat undistorted_img = undistortImage(distoredImagePath);
-    display_image(undistorted_img, 0.6, "Undistorted Image");
-    cv::destroyWindow("Undistorted Image");
+    findCameraDetails(); //NOTE: this function only needs to be run once per camera
+
+
+    // cv::Mat distorted_img = cv::imread("../../../updatedMainMonopolyImage.jpg");
+    string distortedImagePath = "../../../updatedMainMonopolyImage.jpg";
+    tuple<cv::Mat, cv::Mat> camera_values = undistortImage(distortedImagePath);
+    cv::Mat camera_matrix = get<0>(camera_values);
+    cv::Mat dist_coeffs = get<1>(camera_values);
+    testVideoWithUndistortingEachFrame(camera_matrix, dist_coeffs);
+    // cv::Mat undistorted_img;
+    // cv::undistort(distorted_img, undistorted_img, camera_matrix, dist_coeffs);
+    // display_image(undistorted_img, 0.6, "Undistorted Image");
+    // cv::destroyWindow("Undistorted Image");
 
 
     // takeMultiplePictures("../../../calibration_images/", CAMERA_INDEX, "imageHAHA", 10);
