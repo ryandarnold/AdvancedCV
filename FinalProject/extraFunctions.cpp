@@ -4,7 +4,130 @@
 #include <chrono>
 using namespace std;
 
+void findCameraDetails()
+{   //NOTE: this function only needs to be run once per camera
+    /* This function calibrates the camera using a chessboard pattern.
+     * The camera matrix and distortion coefficients
+     * are saved to a file for later use.
+    */
 
+    // Chessboard settings
+    int chessboard_width = 6;  // Number of inner corners per row
+    int chessboard_height = 9; // Number of inner corners per column
+    cv::Size board_size(chessboard_width, chessboard_height);
+
+    // Vectors to store object points and image points
+    std::vector<std::vector<cv::Point3f>> object_points;
+    std::vector<std::vector<cv::Point2f>> image_points;
+
+    // Prepare object points (3D coordinates of chessboard corners)
+    std::vector<cv::Point3f> objp;
+    for (int i = 0; i < chessboard_height; i++) {
+        for (int j = 0; j < chessboard_width; j++) {
+            objp.push_back(cv::Point3f(j, i, 0)); // Assume z=0 since chessboard is flat
+        }
+    }
+
+    // Load calibration images
+    std::vector<cv::String> images;
+    cv::glob("../../../calibration_images/*.jpg", images);  // Ensure images are in this folder
+
+    cv::Mat frame, gray;
+    for (const auto& img_file : images) {
+        frame = cv::imread(img_file);
+        if (frame.empty()) continue;
+
+        cv::cvtColor(frame, gray, cv::COLOR_BGR2GRAY);
+
+        // Detect chessboard corners
+        std::vector<cv::Point2f> corners;
+        bool found = cv::findChessboardCorners(gray, board_size, corners);
+
+        if (found) {
+            // Refine corner detection for better accuracy
+            cv::cornerSubPix(gray, corners, cv::Size(11, 11), cv::Size(-1, -1),
+                             cv::TermCriteria(cv::TermCriteria::EPS + cv::TermCriteria::COUNT, 30, 0.01));
+
+            image_points.push_back(corners);
+            object_points.push_back(objp);
+
+            // Draw detected corners
+            cv::drawChessboardCorners(frame, board_size, corners, found);
+            cv::imshow("Chessboard Detection", frame);
+            cv::waitKey(500);
+        }
+    }
+
+    cv::destroyAllWindows();
+
+    // Camera calibration
+    cv::Mat camera_matrix, dist_coeffs, rvecs, tvecs;
+    cv::calibrateCamera(object_points, image_points, gray.size(), camera_matrix, dist_coeffs, rvecs, tvecs);
+
+    std::cout << "Camera Matrix:\n" << camera_matrix << std::endl;
+    std::cout << "Distortion Coefficients:\n" << dist_coeffs << std::endl;
+
+    // Save calibration results
+    cv::FileStorage fs("../camera_calibration.yml", cv::FileStorage::WRITE);
+    fs << "CameraMatrix" << camera_matrix;
+    fs << "DistCoeffs" << dist_coeffs;
+    fs.release();
+}
+
+tuple<cv::Mat, cv::Mat> findIntrinsicCameraMatrices(string distorted_image_path)
+{
+    //TODO: only call this function once, and then output the camera_matrix and dist_coeffs to the calling function
+    // because accessing file storage will be really slow if you do it at 30fps
+
+    // Load calibration parameters
+    cv::FileStorage fs("../camera_calibration.yml", cv::FileStorage::READ);
+    cv::Mat camera_matrix, dist_coeffs;
+    fs["CameraMatrix"] >> camera_matrix;
+    fs["DistCoeffs"] >> dist_coeffs;
+    fs.release();
+
+    // Capture or load a distorted image
+    cv::Mat distorted_img = cv::imread(distorted_image_path);
+    if (distorted_img.empty()) {
+        throw runtime_error("Custom error: Could not load image!");
+    }
+
+    return {camera_matrix, dist_coeffs};
+}
+
+void testVideoWithUndistortingEachFrame(int CAMERA_INDEX, cv::Mat camera_matrix, cv::Mat dist_coeffs)
+{
+    cv::VideoCapture cap(CAMERA_INDEX); // Open the default camera (0 for the first camera)
+
+    cap.set(cv::CAP_PROP_FRAME_WIDTH, 1024);
+    cap.set(cv::CAP_PROP_FRAME_HEIGHT, 768); // worked very well
+    cap.set(cv::CAP_PROP_FPS, 30);
+    int frame_width = static_cast<int>(cap.get(cv::CAP_PROP_FRAME_WIDTH));
+    int frame_height = static_cast<int>(cap.get(cv::CAP_PROP_FRAME_HEIGHT));
+    double fps = cap.get(cv::CAP_PROP_FPS);
+    std::cout << "Camera FPS: " << fps << std::endl;
+
+
+    bool recording = false;
+    cv::Mat frame;
+    cv::Mat undistorted_frame;
+    while (true) {
+        cap >> frame; // new frame into frame matrix
+        cv::undistort(frame, undistorted_frame, camera_matrix, dist_coeffs);
+        cv::imshow("Live Camera Feed", undistorted_frame);
+
+
+        // Check if any key is pressed
+        int key = cv::waitKey(1);
+        if (key >= 0) // Any key detected
+        {
+            break;
+        }
+
+    }
+    cap.release(); // Release the camera
+    cv::destroyAllWindows(); // Close OpenCV windows
+}
 
 void takeMultiplePictures(string cameraCalibration_path, int CAMERA_INDEX, string imageName, int numImages)
 {
@@ -20,8 +143,7 @@ void takeMultiplePictures(string cameraCalibration_path, int CAMERA_INDEX, strin
 
 }
 
-
-void takeASinglePicture(string cameraCalibration_path, int CAMERA_INDEX, string imageName)
+void takeASinglePicture(string saveImageToThisPath, int CAMERA_INDEX, string imageName)
 {
     cout << "camera index: " + CAMERA_INDEX << endl;
     cv::VideoCapture cap(CAMERA_INDEX); // Open the default camera (0 for the first camera)
@@ -53,7 +175,7 @@ void takeASinglePicture(string cameraCalibration_path, int CAMERA_INDEX, string 
         int key = cv::waitKey(1);
         if (key >= 0) {  // Any key pressed
             // string filename = "../captured_image_" + std::to_string(imageCount) + ".jpg"; //maybe change to .png
-            string filename = cameraCalibration_path + imageName + ".jpg";
+            string filename = saveImageToThisPath + imageName + ".jpg";
             cv::imwrite(filename, frame); // Save image
             cout << "Image saved as: " << filename << std::endl;
             imageCount++; // Increment image counter
@@ -65,7 +187,6 @@ void takeASinglePicture(string cameraCalibration_path, int CAMERA_INDEX, string 
     cap.release(); // Release the camera
     cv::destroyAllWindows(); // Close OpenCV windows
 }
-
 
 void takeASingleVideo(int CAMERA_INDEX)
 {
