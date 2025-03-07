@@ -18,6 +18,15 @@ void display_image(cv::Mat original_image, double Scale, string window_name)
     cv::waitKey(0);
 }
 
+void display_video_frame(cv::Mat videoFrameToDisplay, double Scale, string window_name)
+{
+    //This function just displays a single video frame, and it is up to the caller of this function
+    //to determine the delay between frames
+    cv::Mat resized_frame;
+    cv::resize(videoFrameToDisplay, resized_frame, cv::Size(), Scale, Scale, cv::INTER_AREA);
+    cv::imshow(window_name, resized_frame);
+}
+
 cv::Mat testingSIFT(cv::Mat mainBoardTemplateImage, cv::Mat currentFrameImage)
 {
     // Load images
@@ -71,9 +80,9 @@ cv::Mat testingSIFT(cv::Mat mainBoardTemplateImage, cv::Mat currentFrameImage)
     cv::warpPerspective(currentFrameImage, aligned_scene, M, mainBoardTemplateImage.size());
 
     // Display results
-    display_image(mainBoardTemplateImage, 0.5, "Original Monopoly Board");
-    display_image(aligned_scene, 0.5, "aligned Monopoly Board");
-    cv::destroyAllWindows();
+    // display_image(mainBoardTemplateImage, 0.5, "Original Monopoly Board");
+    // display_image(aligned_scene, 0.5, "aligned Monopoly Board");
+    // cv::destroyAllWindows();
     return aligned_scene;
 }
 
@@ -119,14 +128,51 @@ cv::Mat crop_out_background(cv::Mat current_frame)
     // display_image(current_frame, 0.5, "Detected Monopoly Board");
     // cv::imshow("Cropped Monopoly Board", cropped_board);
     // display_image(cropped_board, 0.5, "Cropped Monopoly Board");
-    cv::waitKey(0);
+    // cv::waitKey(0);
 
     return cropped_board;
 }
 
-void liveVideoOfMonopolyBoard(cv::Mat camera_matrix, cv::Mat dist_coeffs)
+
+void liveVideoOfMonopolyBoard(cv::Mat main_monopoly_image, cv::Mat camera_matrix, cv::Mat dist_coeffs)
 {
-    //this will be the main loop that will run the game
+    //this will be the main loop that will run the game and display the game board
+    cv::VideoCapture cap(CAMERA_INDEX);
+    cap.set(cv::CAP_PROP_FRAME_WIDTH, 1024);
+    cap.set(cv::CAP_PROP_FRAME_HEIGHT, 768); // worked very well
+    cap.set(cv::CAP_PROP_FPS, 60);
+
+    cv::Mat currentFrame, undistorted_current_frame, warped_current_video_frame;
+    double Scale = 0.5;
+    int current_frame_count = 0;
+    bool first_frame = true;
+    while (true) {
+        current_frame_count++;
+        cap >> currentFrame; // grab new video frame
+
+        cv::undistort(currentFrame, undistorted_current_frame, camera_matrix, dist_coeffs);
+        cv::Mat cropped_board;
+        if (current_frame_count % 3 == 0)
+        {
+            warped_current_video_frame = testingSIFT(main_monopoly_image, undistorted_current_frame);
+            cropped_board = crop_out_background(warped_current_video_frame);
+        }
+        if (first_frame == true && current_frame_count < 3)
+        {
+            //just for the first two frames, display the original main monopoly board
+            display_video_frame(main_monopoly_image, Scale, "Live Camera Feed");
+            first_frame = false;
+        }
+        else
+        {
+            display_video_frame(cropped_board, Scale, "Live Camera Feed");
+        }
+
+        if (int key = cv::waitKey(33); key >= 0) { break;} // displays at 30FPS
+    }
+
+    cap.release(); // Release the camera
+    cv::destroyAllWindows(); // Close OpenCV windows
 }
 
 int main()
@@ -147,7 +193,6 @@ int main()
     // findCameraDetails();
 
 
-    // cv::Mat distorted_img = cv::imread("../../../updatedMainMonopolyImage.jpg");
     string distortedImagePath = "../../../updatedMainMonopolyImage.jpg";
     tuple<cv::Mat, cv::Mat> camera_values = findIntrinsicCameraMatrices(distortedImagePath);
     cv::Mat camera_matrix = get<0>(camera_values);
@@ -160,26 +205,22 @@ int main()
     // return 0;
 
     string main_monopoly_pic = "../../../updatedMainMonopolyImage.jpg";
-    // string scene_image = "../undistorted_POV_angled_main_monopoly_picture.jpg";
     string scene_image = "../distorted_angled_main_monopoly_picture.jpg";
-    // string angled_main_monopoly_pic = "../../../angled_main_monopoly_picture.jpg";
     cv::Mat main_monopoly_image = cv::imread(main_monopoly_pic, cv::IMREAD_COLOR);
     cv::Mat current_scene_image = cv::imread(scene_image, cv::IMREAD_COLOR);
 
     cv::Mat undistorted_main_image;
     cv::undistort(main_monopoly_image, undistorted_main_image, camera_matrix, dist_coeffs);
+    cv::Mat cropped_main_monopoly_image = crop_out_background(undistorted_main_image);
+    liveVideoOfMonopolyBoard(cropped_main_monopoly_image, camera_matrix, dist_coeffs);
 
-    cv::Mat undistorted_scene_image;
-    cv::undistort(current_scene_image, undistorted_scene_image, camera_matrix, dist_coeffs);
 
-    cv::Mat warped_current_video_frame;
-    warped_current_video_frame = testingSIFT(undistorted_main_image, undistorted_scene_image);
 
-    // cv::Mat undistorted_frame;
-    // cv::undistort(warped_current_video_frame, undistorted_frame, camera_matrix, dist_coeffs);
 
-    cv::Mat cropped_board = crop_out_background(warped_current_video_frame);
-    display_image(cropped_board, 0.5, "cropped final Monopoly Board");
+
+
+    //
+    // display_image(cropped_board, 0.5, "cropped final Monopoly Board");
 
 
     return 0;
