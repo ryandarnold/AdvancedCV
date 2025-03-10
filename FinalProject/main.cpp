@@ -29,10 +29,6 @@ void display_video_frame(cv::Mat videoFrameToDisplay, double Scale, string windo
 
 cv::Mat testingSIFT(cv::Mat mainBoardTemplateImage, cv::Mat currentFrameImage)
 {
-    // Load images
-    // cv::Mat board_img = cv::imread(board_template_name, cv::IMREAD_COLOR);
-    // cv::Mat scene_img = cv::imread(scene_image_name, cv::IMREAD_COLOR);
-
     // Create SIFT detector
     cv::Ptr<cv::SIFT> sift = cv::SIFT::create();
 
@@ -79,10 +75,6 @@ cv::Mat testingSIFT(cv::Mat mainBoardTemplateImage, cv::Mat currentFrameImage)
     cv::Mat aligned_scene;
     cv::warpPerspective(currentFrameImage, aligned_scene, M, mainBoardTemplateImage.size());
 
-    // Display results
-    // display_image(mainBoardTemplateImage, 0.5, "Original Monopoly Board");
-    // display_image(aligned_scene, 0.5, "aligned Monopoly Board");
-    // cv::destroyAllWindows();
     return aligned_scene;
 }
 
@@ -143,7 +135,9 @@ void liveVideoOfMonopolyBoard(cv::Mat main_monopoly_image, cv::Mat camera_matrix
     cap.set(cv::CAP_PROP_FPS, 60);
 
     cv::Mat currentFrame, undistorted_current_frame, warped_current_video_frame;
-    double Scale = 0.5;
+    cv::Mat cropped_board = cv::Mat::zeros(main_monopoly_image.rows, main_monopoly_image.cols, CV_8UC3);  // For a 3-channel image
+
+    double Scale = 0.7;
     int current_frame_count = 0;
     bool first_frame = true;
     while (true) {
@@ -151,22 +145,12 @@ void liveVideoOfMonopolyBoard(cv::Mat main_monopoly_image, cv::Mat camera_matrix
         cap >> currentFrame; // grab new video frame
 
         cv::undistort(currentFrame, undistorted_current_frame, camera_matrix, dist_coeffs);
-        cv::Mat cropped_board;
-        if (current_frame_count % 3 == 0)
+        if (current_frame_count % 3 == 0) //only do SIFT every 3 frames because it is computationally expensive
         {
             warped_current_video_frame = testingSIFT(main_monopoly_image, undistorted_current_frame);
             cropped_board = crop_out_background(warped_current_video_frame);
         }
-        if (first_frame == true && current_frame_count < 3)
-        {
-            //just for the first two frames, display the original main monopoly board
-            display_video_frame(main_monopoly_image, Scale, "Live Camera Feed");
-            first_frame = false;
-        }
-        else
-        {
-            display_video_frame(cropped_board, Scale, "Live Camera Feed");
-        }
+        display_video_frame(cropped_board, Scale, "Live Camera Feed");
 
         if (int key = cv::waitKey(33); key >= 0) { break;} // displays at 30FPS
     }
@@ -175,10 +159,16 @@ void liveVideoOfMonopolyBoard(cv::Mat main_monopoly_image, cv::Mat camera_matrix
     cv::destroyAllWindows(); // Close OpenCV windows
 }
 
+
+
+
 int main()
 {
-    //TODO: 1) note to myself: I still need to test the SIFT at 30FPS and make sure it doesn't lag
-    //      and if it does lag, then try only doing SIFT every 5 frames or something
+    //first take a picture of the hat to see if i can crop out the background so SIFT/template matching can work easier
+    takeASinglePicture("../", CAMERA_INDEX, "raw_hat_picture");
+    return 0;
+    // 1) note to myself: I still need to test the SIFT at 30FPS and make sure it doesn't lag
+    //      and if it does lag, then try only doing SIFT every 5 frames or something -- WORKS DOING SIFT EVERY 3 FRAMES
     //TODO: 2) still need to take pictures of each of the game board pieces and see if SIFT can detect them
     //TODO: 3) then if SIFT can detect the pieces, then need to find the locations (x,y) of each specific piece
     //TODO: 4) then need to make some graphics on screen that will show the user the locations of each piece
@@ -191,7 +181,6 @@ int main()
 
     //but first need to calibrate the camera so the board looks like a perfect rectangle
     // findCameraDetails();
-
 
     string distortedImagePath = "../../../updatedMainMonopolyImage.jpg";
     tuple<cv::Mat, cv::Mat> camera_values = findIntrinsicCameraMatrices(distortedImagePath);
@@ -213,15 +202,6 @@ int main()
     cv::undistort(main_monopoly_image, undistorted_main_image, camera_matrix, dist_coeffs);
     cv::Mat cropped_main_monopoly_image = crop_out_background(undistorted_main_image);
     liveVideoOfMonopolyBoard(cropped_main_monopoly_image, camera_matrix, dist_coeffs);
-
-
-
-
-
-
-    //
-    // display_image(cropped_board, 0.5, "cropped final Monopoly Board");
-
 
     return 0;
 }
