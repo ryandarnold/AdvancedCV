@@ -74,7 +74,7 @@ void findCameraDetails()
     fs.release();
 }
 
-tuple<cv::Mat, cv::Mat> findIntrinsicCameraMatrices(string distorted_image_path)
+tuple<cv::Mat, cv::Mat> findIntrinsicCameraMatrices()
 {
     //TODO: only call this function once, and then output the camera_matrix and dist_coeffs to the calling function
     // because accessing file storage will be really slow if you do it at 30fps
@@ -85,12 +85,6 @@ tuple<cv::Mat, cv::Mat> findIntrinsicCameraMatrices(string distorted_image_path)
     fs["CameraMatrix"] >> camera_matrix;
     fs["DistCoeffs"] >> dist_coeffs;
     fs.release();
-
-    // Capture or load a distorted image
-    cv::Mat distorted_img = cv::imread(distorted_image_path);
-    if (distorted_img.empty()) {
-        throw runtime_error("Custom error: Could not load image!");
-    }
 
     return {camera_matrix, dist_coeffs};
 }
@@ -129,7 +123,7 @@ void testVideoWithUndistortingEachFrame(int CAMERA_INDEX, cv::Mat camera_matrix,
     cv::destroyAllWindows(); // Close OpenCV windows
 }
 
-void takeMultiplePictures(string cameraCalibration_path, int CAMERA_INDEX, string imageName, int numImages)
+void takeMultiplePictures(int CAMERA_INDEX, string imageName, int numImages)
 {
     // string cameraCalibration_path = "../../../calibration_images/"; //all .jpg images in folder
     // string imageName = "imageHEHE";
@@ -137,14 +131,14 @@ void takeMultiplePictures(string cameraCalibration_path, int CAMERA_INDEX, strin
     cout << "starting to take multiple pictures" << endl;
     for (int i = 0; i < numImages; i++)
     {
-        takeASinglePicture(cameraCalibration_path, CAMERA_INDEX, imageName + to_string(i));
+        takeASinglePicture(CAMERA_INDEX, to_string(i) + imageName);
         cout << "finished taking picture: " << i << endl;
     }
-
 }
 
-void takeASinglePicture(string saveImageToThisPath, int CAMERA_INDEX, string imageName)
+void takeASinglePicture(int CAMERA_INDEX, string imagePathANDnameANDextension)
 {
+    //NOTE: this function does NOT undistort the image using the camera intrinsics to account for barrel warping
     cout << "camera index: " + CAMERA_INDEX << endl;
     cv::VideoCapture cap(CAMERA_INDEX); // Open the default camera (0 for the first camera)
     std::cout << "Current Width: " << cap.get(cv::CAP_PROP_FRAME_WIDTH) << std::endl;
@@ -175,12 +169,11 @@ void takeASinglePicture(string saveImageToThisPath, int CAMERA_INDEX, string ima
         int key = cv::waitKey(1);
         if (key >= 0) {  // Any key pressed
             // string filename = "../captured_image_" + std::to_string(imageCount) + ".jpg"; //maybe change to .png
-            string filename = saveImageToThisPath + imageName + ".jpg";
-            cv::imwrite(filename, frame); // Save image
-            cout << "Image saved as: " << filename << std::endl;
+            // string filename = imagePathANDnameANDextension;
+            cv::imwrite(imagePathANDnameANDextension, frame); // Save image
+            cout << "Image saved as: " << imagePathANDnameANDextension << std::endl;
             imageCount++; // Increment image counter
             break;
-
         }
 
     }

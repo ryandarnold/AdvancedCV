@@ -27,8 +27,12 @@ void display_video_frame(cv::Mat videoFrameToDisplay, double Scale, string windo
     cv::imshow(window_name, resized_frame);
 }
 
-cv::Mat testingSIFT(cv::Mat mainBoardTemplateImage, cv::Mat currentFrameImage)
+cv::Mat SIFT_forGameBoardAlignment(cv::Mat mainBoardTemplateImage, cv::Mat currentFrameImage)
 {
+    //this function will try to warp the current frame image to match the main board template image
+    //using the SIFT algorithm, so that they're aligned as much as possible
+
+
     // Create SIFT detector
     cv::Ptr<cv::SIFT> sift = cv::SIFT::create();
 
@@ -139,7 +143,9 @@ void liveVideoOfMonopolyBoard(cv::Mat main_monopoly_image, cv::Mat camera_matrix
 
     double Scale = 0.7;
     int current_frame_count = 0;
-    bool first_frame = true;
+
+    string HAT = "../main_hat_picture_undistorted.jpg";
+    cv::Mat gamePiece_HAT =  cv::imread(HAT, cv::IMREAD_COLOR);
     while (true) {
         current_frame_count++;
         cap >> currentFrame; // grab new video frame
@@ -147,7 +153,7 @@ void liveVideoOfMonopolyBoard(cv::Mat main_monopoly_image, cv::Mat camera_matrix
         cv::undistort(currentFrame, undistorted_current_frame, camera_matrix, dist_coeffs);
         if (current_frame_count % 3 == 0) //only do SIFT every 3 frames because it is computationally expensive
         {
-            warped_current_video_frame = testingSIFT(main_monopoly_image, undistorted_current_frame);
+            warped_current_video_frame = SIFT_forGameBoardAlignment(main_monopoly_image, undistorted_current_frame);
             cropped_board = crop_out_background(warped_current_video_frame);
         }
         display_video_frame(cropped_board, Scale, "Live Camera Feed");
@@ -160,13 +166,125 @@ void liveVideoOfMonopolyBoard(cv::Mat main_monopoly_image, cv::Mat camera_matrix
 }
 
 
+void findGamePiece(cv::Mat mainMonopolyBoard, cv::Mat gamePieceTemplate, double threshold = 0.8) {
+
+    // Result matrix
+    cv::Mat result;
+    cv::matchTemplate(mainMonopolyBoard, gamePieceTemplate, result, cv::TM_CCOEFF_NORMED);
+
+    // Find best match location
+    double minVal, maxVal;
+    cv::Point minLoc, maxLoc;
+    cv::minMaxLoc(result, &minVal, &maxVal, &minLoc, &maxLoc);
+
+    std::cout << "Best match score: " << maxVal << std::endl;
+
+    // Apply threshold to filter false positives
+    if (maxVal >= threshold) {
+        // Draw rectangle only if confidence is high
+        cv::rectangle(mainMonopolyBoard, maxLoc,
+                      cv::Point(maxLoc.x + gamePieceTemplate.cols, maxLoc.y + gamePieceTemplate.rows),
+                      cv::Scalar(0, 255, 0), 3);
+        std::cout << "Game piece detected at: " << maxLoc << std::endl;
+    } else {
+        std::cerr << "No good match found! Try lowering the threshold." << std::endl;
+    }
+
+    // Show result
+    cv::imshow("Detected Game Piece", mainMonopolyBoard);
+    cv::waitKey(0);
+}
+
+
+
+void findHatPieceEdges(cv::Mat mainMonopolyBoard, cv::Mat gamePieceTemplate, double threshold = 0.8)
+{
+    //NOTE: in this state, this function doesn't work (I think because the threshold for edges
+    // apply to both the input template and the game board. I would need to find a 'perfect'
+    //template image of the edges hat piece, and then change the threshold on JUST the main board image
+    //to get an accurate detection of the hat piece in edge-form
+
+    // Convert both images to grayscale
+    cv::Mat board_gray, piece_gray;
+    cv::cvtColor(mainMonopolyBoard, board_gray, cv::COLOR_BGR2GRAY);
+    cv::cvtColor(gamePieceTemplate, piece_gray, cv::COLOR_BGR2GRAY);
+
+    // Apply Canny edge detection
+    cv::Mat board_edges, piece_edges;
+    cv::Canny(board_gray, board_edges, 50, 150);  // Adjust thresholds as needed
+    cv::Canny(piece_gray, piece_edges, 50, 150);  // Adjust thresholds as needed
+
+    // Perform template matching on edge images
+    cv::Mat result;
+    cv::matchTemplate(board_edges, piece_edges, result, cv::TM_CCOEFF_NORMED);
+
+    // Find the best match location
+    double minVal, maxVal;
+    cv::Point minLoc, maxLoc;
+    cv::minMaxLoc(result, &minVal, &maxVal, &minLoc, &maxLoc);
+
+    // Apply threshold to filter weak matches
+    if (maxVal >= threshold) {
+        cv::rectangle(mainMonopolyBoard, maxLoc,
+                      cv::Point(maxLoc.x + gamePieceTemplate.cols, maxLoc.y + gamePieceTemplate.rows),
+                      cv::Scalar(0, 255, 0), 3);
+        std::cout << "Hat piece detected at: " << maxLoc << std::endl;
+    } else {
+        std::cerr << "No strong match found! Try lowering the threshold." << std::endl;
+    }
+
+    // Show results
+    cv::imshow("Edge-Detected Board", board_edges);
+    cv::imshow("Edge-Detected Hat Piece", piece_edges);
+    cv::imshow("Detected Hat Piece", mainMonopolyBoard);
+    cv::waitKey(0);
+}
+
+
+
 
 
 int main()
 {
-    //first take a picture of the hat to see if i can crop out the background so SIFT/template matching can work easier
-    takeASinglePicture("../", CAMERA_INDEX, "raw_hat_picture");
+    //below is for testing----------------------------------------------------------
+    // step 1: load in the HAT game piece template image
+    string HAT_path = "../main_hat_picture_undistorted.jpg";
+    cv::Mat HAT_image = cv::imread(HAT_path, cv::IMREAD_COLOR);
+
+    // step 2: load in the current monopoly board that has the HAT game piece on it
+    string current_monopoly_board_path = "../singleFrameOfHatOnMonopolyBoard_distorted.jpg";
+    cv::Mat current_monopoly_board_image = cv::imread(current_monopoly_board_path, cv::IMREAD_COLOR);
+
+    //step 3: undistort the current monopoly board image
+    tuple<cv::Mat, cv::Mat> camera_values = findIntrinsicCameraMatrices();
+    cv::Mat camera_matrix = get<0>(camera_values);
+    cv::Mat dist_coeffs = get<1>(camera_values);
+    cv::Mat undistorted_main_image;
+    cv::undistort(current_monopoly_board_image, undistorted_main_image, camera_matrix, dist_coeffs);
+    // display_image(undistorted_main_image, 0.5, "Undistorted Monopoly Board");
+
+    //step 4: crop out the background of the undistorted monopoly board image
+    cv::Mat cropped_main_monopoly_image = crop_out_background(undistorted_main_image);
+
+    //step 5: now to try to detect the HAT game piece on the undistorted and cropped monopoly board image
+
+    //below does NOT work-------------------------------------------
+    // findGamePiece(cropped_main_monopoly_image, HAT_image, 0.15); //uses simple template matching in all color
+    // findHatPieceEdges(cropped_main_monopoly_image, HAT_image, 0.01); //uses edge detection for template matching
+    //above does NOT work-------------------------------------------
+
+    // Equalize lighting
+    cv::Mat equalizedImage = equalizeLighting(cropped_main_monopoly_image);
+
+    // Display results
+    cv::imshow("Original Image", cropped_main_monopoly_image);
+    cv::imshow("Lighting Equalized Image", equalizedImage);
+    cv::waitKey(0);
+
     return 0;
+    //above is for testing----------------------------------------------------------
+
+    // return 0;
     // 1) note to myself: I still need to test the SIFT at 30FPS and make sure it doesn't lag
     //      and if it does lag, then try only doing SIFT every 5 frames or something -- WORKS DOING SIFT EVERY 3 FRAMES
     //TODO: 2) still need to take pictures of each of the game board pieces and see if SIFT can detect them
@@ -182,27 +300,22 @@ int main()
     //but first need to calibrate the camera so the board looks like a perfect rectangle
     // findCameraDetails();
 
-    string distortedImagePath = "../../../updatedMainMonopolyImage.jpg";
-    tuple<cv::Mat, cv::Mat> camera_values = findIntrinsicCameraMatrices(distortedImagePath);
-    cv::Mat camera_matrix = get<0>(camera_values);
-    cv::Mat dist_coeffs = get<1>(camera_values);
-
-    // testVideoWithUndistortingEachFrame(CAMERA_INDEX, camera_matrix, dist_coeffs);
-    // return 0;
-
-    // takeASinglePicture("../", CAMERA_INDEX, "undistorted_POV_angled_main_monopoly_picture");
-    // return 0;
-
-    string main_monopoly_pic = "../../../updatedMainMonopolyImage.jpg";
-    string scene_image = "../distorted_angled_main_monopoly_picture.jpg";
-    cv::Mat main_monopoly_image = cv::imread(main_monopoly_pic, cv::IMREAD_COLOR);
-    cv::Mat current_scene_image = cv::imread(scene_image, cv::IMREAD_COLOR);
-
-    cv::Mat undistorted_main_image;
-    cv::undistort(main_monopoly_image, undistorted_main_image, camera_matrix, dist_coeffs);
-    cv::Mat cropped_main_monopoly_image = crop_out_background(undistorted_main_image);
-    liveVideoOfMonopolyBoard(cropped_main_monopoly_image, camera_matrix, dist_coeffs);
-
+    //below is main code for the game-------------------------------------------------------
+    // string distortedImagePath = "../../../updatedMainMonopolyImage.jpg";
+    // tuple<cv::Mat, cv::Mat> camera_values = findIntrinsicCameraMatrices();
+    // cv::Mat camera_matrix = get<0>(camera_values);
+    // cv::Mat dist_coeffs = get<1>(camera_values);
+    //
+    // string main_monopoly_pic = "../../../updatedMainMonopolyImage.jpg";
+    // string scene_image = "../distorted_angled_main_monopoly_picture.jpg";
+    // cv::Mat main_monopoly_image = cv::imread(main_monopoly_pic, cv::IMREAD_COLOR);
+    // cv::Mat current_scene_image = cv::imread(scene_image, cv::IMREAD_COLOR);
+    //
+    // cv::Mat undistorted_main_image;
+    // cv::undistort(main_monopoly_image, undistorted_main_image, camera_matrix, dist_coeffs);
+    // cv::Mat cropped_main_monopoly_image = crop_out_background(undistorted_main_image);
+    // liveVideoOfMonopolyBoard(cropped_main_monopoly_image, camera_matrix, dist_coeffs);
+    //above is main code for the game-------------------------------------------------------
     return 0;
 }
 

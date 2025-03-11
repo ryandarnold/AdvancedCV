@@ -12,10 +12,10 @@ using namespace std;
 
 
 void findCameraDetails();
-tuple<cv::Mat, cv::Mat> findIntrinsicCameraMatrices(string distorted_image_path);
+tuple<cv::Mat, cv::Mat> findIntrinsicCameraMatrices();
 void testVideoWithUndistortingEachFrame(int CAMERA_INDEX, cv::Mat camera_matrix, cv::Mat dist_coeffs);
 void takeMultiplePictures(string cameraCalibration_path, int CAMERA_INDEX, string imageName, int numImages);
-void takeASinglePicture(string cameraCalibration_path, int CAMERA_INDEX, string imageName);
+void takeASinglePicture(int CAMERA_INDEX, string imageName);
 void takeASingleVideo(int CAMERA_INDEX);
 void gettingSingleFrameFromAngledVideo();
 void measureFPS(int CAMERA_INDEX);
