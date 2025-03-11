@@ -241,14 +241,107 @@ void findHatPieceEdges(cv::Mat mainMonopolyBoard, cv::Mat gamePieceTemplate, dou
 }
 
 
+cv::Mat equalizeLightingLAB(const cv::Mat& inputImage) {
+    // Convert to LAB color space
+    cv::Mat labImage;
+    cv::cvtColor(inputImage, labImage, cv::COLOR_BGR2Lab);
+
+    // Split LAB channels (L = brightness, A & B = color information)
+    std::vector<cv::Mat> labChannels;
+    cv::split(labImage, labChannels);
+
+    // Apply Otsu’s thresholding on the Luminance (L) channel (without blurring)
+    double otsuThreshold = cv::threshold(labChannels[0], labChannels[0], 0, 255, cv::THRESH_BINARY | cv::THRESH_OTSU);
+    std::cout << "Otsu Threshold for Luminance: " << otsuThreshold << std::endl;
+
+    // Normalize brightness in the L channel
+    cv::normalize(labChannels[0], labChannels[0], 0, 255, cv::NORM_MINMAX);
+
+    // Merge channels back
+    cv::Mat equalizedLAB;
+    cv::merge(labChannels, equalizedLAB);
+
+    // Convert back to BGR color space
+    cv::Mat equalizedImage;
+    cv::cvtColor(equalizedLAB, equalizedImage, cv::COLOR_Lab2BGR);
+
+    return equalizedImage;
+}
 
 
+cv::Mat adaptiveThresholdLAB(const cv::Mat& inputImage) {
+    // Convert to LAB color space
+    cv::Mat labImage;
+    cv::cvtColor(inputImage, labImage, cv::COLOR_BGR2Lab);
+
+    // Split channels (L = brightness, A & B = color)
+    std::vector<cv::Mat> labChannels;
+    cv::split(labImage, labChannels);
+
+    // Apply adaptive thresholding to the Luminance (L) channel
+    // cv::adaptiveThreshold(labChannels[0], labChannels[0], 255,
+    //                       cv::ADAPTIVE_THRESH_GAUSSIAN_C,
+    //                       cv::THRESH_BINARY, 11, 2);
+
+    cv::adaptiveThreshold(labChannels[0], labChannels[0], 255,
+                      cv::ADAPTIVE_THRESH_MEAN_C,  // <== Change from GAUSSIAN_C to MEAN_C
+                      cv::THRESH_BINARY, 3, 5);
+
+    // Merge channels back
+    cv::Mat processedLAB;
+    cv::merge(labChannels, processedLAB);
+
+    // Convert back to BGR
+    cv::Mat finalImage;
+    cv::cvtColor(processedLAB, finalImage, cv::COLOR_Lab2BGR);
+
+    return finalImage;
+}
+
+cv::Mat filterColorHSV(const cv::Mat& inputImage, cv::Scalar lowerBound, cv::Scalar upperBound) {
+    // Convert to HSV color space
+    cv::Mat hsvImage;
+    cv::cvtColor(inputImage, hsvImage, cv::COLOR_BGR2HSV);
+
+    // Create mask using the color range
+    cv::Mat mask;
+    cv::inRange(hsvImage, lowerBound, upperBound, mask);
+
+    // Apply the mask to keep only the desired colors
+    cv::Mat result;
+    cv::bitwise_and(inputImage, inputImage, result, mask);
+
+    return result;
+}
+
+
+cv::Mat filterShinyGrayHSV(const cv::Mat& inputImage) {
+    // Convert to HSV color space
+    cv::Mat hsvImage;
+    cv::cvtColor(inputImage, hsvImage, cv::COLOR_BGR2HSV);
+
+    // Define HSV range for shiny gray objects
+    //HSV; H = 0-180, S = 0-255, V = 0-255
+    cv::Scalar lowerGray(0, 0, 50);   // Dark gray
+    cv::Scalar upperGray(20, 255, 255); // Slightly shiny gray
+
+    // Create mask
+    cv::Mat mask;
+    cv::inRange(hsvImage, lowerGray, upperGray, mask);
+
+    // Apply mask to keep only the detected shiny gray objects
+    cv::Mat result;
+    cv::bitwise_and(inputImage, inputImage, result, mask);
+
+    return result;
+}
 
 int main()
 {
     //below is for testing----------------------------------------------------------
     // step 1: load in the HAT game piece template image
-    string HAT_path = "../main_hat_picture_undistorted.jpg";
+    // string HAT_path = "../main_hat_picture_undistorted.jpg";
+    string HAT_path = "../HATtemplate.jpg";
     cv::Mat HAT_image = cv::imread(HAT_path, cv::IMREAD_COLOR);
 
     // step 2: load in the current monopoly board that has the HAT game piece on it
@@ -271,10 +364,15 @@ int main()
     //below does NOT work-------------------------------------------
     // findGamePiece(cropped_main_monopoly_image, HAT_image, 0.15); //uses simple template matching in all color
     // findHatPieceEdges(cropped_main_monopoly_image, HAT_image, 0.01); //uses edge detection for template matching
+    //cv::Mat equalizedImage = equalizeLightingLAB(cropped_main_monopoly_image);
+    //cv::Mat equalizedImage = adaptiveThresholdLAB(cropped_main_monopoly_image);
+    // cv::Mat equalizedImage = filterColorHSV(cropped_main_monopoly_image, lowerBlack, upperBlack);
     //above does NOT work-------------------------------------------
 
-    // Equalize lighting
-    cv::Mat equalizedImage = equalizeLighting(cropped_main_monopoly_image);
+
+
+    cv::Mat equalizedImage =  filterShinyGrayHSV(cropped_main_monopoly_image);
+    findGamePiece(equalizedImage, HAT_image, 0.3);
 
     // Display results
     cv::imshow("Original Image", cropped_main_monopoly_image);
