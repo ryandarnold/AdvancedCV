@@ -27,12 +27,8 @@ void display_video_frame(cv::Mat videoFrameToDisplay, double Scale, string windo
     cv::imshow(window_name, resized_frame);
 }
 
-cv::Mat SIFT_forGameBoardAlignment(cv::Mat mainBoardTemplateImage, cv::Mat currentFrameImage)
+tuple<cv::Mat, cv::Point2f> SIFT_forGameBoardAlignment(cv::Mat mainBoardTemplateImage, cv::Mat currentFrameImage)
 {
-    //this function will try to warp the current frame image to match the main board template image
-    //using the SIFT algorithm, so that they're aligned as much as possible
-
-
     // Create SIFT detector
     cv::Ptr<cv::SIFT> sift = cv::SIFT::create();
 
@@ -45,41 +41,48 @@ cv::Mat SIFT_forGameBoardAlignment(cv::Mat mainBoardTemplateImage, cv::Mat curre
     // Use FLANN-based matcher
     cv::FlannBasedMatcher matcher;
     std::vector<std::vector<cv::DMatch>> knn_matches;
-    matcher.knnMatch(des1, des2, knn_matches, 2);  // Find 2 nearest matches for each descriptor
+    matcher.knnMatch(des1, des2, knn_matches, 2);
 
     // Apply Lowe’s Ratio Test
     std::vector<cv::DMatch> good_matches;
     for (auto& m : knn_matches) {
-        if (m[0].distance < 0.75 * m[1].distance) {  // Lowe's Ratio Test
+        if (m[0].distance < 0.5 * m[1].distance) {
             good_matches.push_back(m[0]);
         }
     }
 
     // Ensure enough good matches exist for homography
     if (good_matches.size() < 10) {
-        //std::cout << "Error: Not enough good matches to compute homography!" << std::endl;
         throw std::invalid_argument("Error: Not enough good matches to compute homography!");
     }
 
     // Extract keypoint coordinates
     std::vector<cv::Point2f> src_pts, dst_pts;
     for (auto& match : good_matches) {
-        src_pts.push_back(kp1[match.queryIdx].pt); // Points in the original Monopoly board image
-        dst_pts.push_back(kp2[match.trainIdx].pt); // Corresponding points in the second image
+        src_pts.push_back(kp1[match.queryIdx].pt); // Points in mainBoardTemplateImage
+        dst_pts.push_back(kp2[match.trainIdx].pt); // Points in currentFrameImage
     }
 
     // Compute homography using RANSAC
     cv::Mat M = cv::findHomography(dst_pts, src_pts, cv::RANSAC);
-
     if (M.empty()) {
         throw std::invalid_argument("Error: Homography computation failed!");
     }
 
-    // Warp the second image to align with the original board image
+    // Warp current frame to align with template
     cv::Mat aligned_scene;
     cv::warpPerspective(currentFrameImage, aligned_scene, M, mainBoardTemplateImage.size());
 
-    return aligned_scene;
+    // 🔹 Calculate center of matched points in `mainBoardTemplateImage`
+    cv::Point2f center(0, 0);
+    for (const auto& pt : src_pts) {
+        center.x += pt.x;
+        center.y += pt.y;
+    }
+    center.x /= src_pts.size();
+    center.y /= src_pts.size();
+
+    return {aligned_scene, center};
 }
 
 cv::Mat crop_out_background(cv::Mat current_frame)
@@ -153,7 +156,7 @@ void liveVideoOfMonopolyBoard(cv::Mat main_monopoly_image, cv::Mat camera_matrix
         cv::undistort(currentFrame, undistorted_current_frame, camera_matrix, dist_coeffs);
         if (current_frame_count % 3 == 0) //only do SIFT every 3 frames because it is computationally expensive
         {
-            warped_current_video_frame = SIFT_forGameBoardAlignment(main_monopoly_image, undistorted_current_frame);
+            // warped_current_video_frame = SIFT_forGameBoardAlignment(main_monopoly_image, undistorted_current_frame);
             cropped_board = crop_out_background(warped_current_video_frame);
         }
         display_video_frame(cropped_board, Scale, "Live Camera Feed");
@@ -167,6 +170,7 @@ void liveVideoOfMonopolyBoard(cv::Mat main_monopoly_image, cv::Mat camera_matrix
 
 
 void findGamePiece(cv::Mat mainMonopolyBoard, cv::Mat gamePieceTemplate, double threshold = 0.8) {
+    //This function does template matching to find the game piece on the game board
 
     // Result matrix
     cv::Mat result;
@@ -369,14 +373,33 @@ int main()
     // cv::Mat equalizedImage = filterColorHSV(cropped_main_monopoly_image, lowerBlack, upperBlack);
     //above does NOT work-------------------------------------------
 
+    // cv::Mat warped_thing = SIFT_forGameBoardAlignment(cropped_main_monopoly_image, HAT_image);
+    tuple<cv::Mat, cv::Point2f> result=SIFT_forGameBoardAlignment(cropped_main_monopoly_image, HAT_image);
+    cv::Mat alignedBoard = std::get<0>(result);
+    cv::Point2f matchCenter = std::get<1>(result);
+    cout << "match center x: " + to_string(matchCenter.x) << endl;
+    cout << "match center y: " + to_string(matchCenter.y) << endl;
+
+    int rectSize = 20;  // Width and height of the rectangle
+
+    // Get the top-left and bottom-right corners
+    cv::Point topLeft(matchCenter.x - rectSize / 2, matchCenter.y - rectSize / 2);
+    cv::Point bottomRight(matchCenter.x + rectSize / 2, matchCenter.y + rectSize / 2);
+
+    // Draw the rectangle on the board image
+    cv::rectangle(cropped_main_monopoly_image, topLeft, bottomRight, cv::Scalar(0, 255, 0), 2);  // Green rectangle
+
+    // Show the image with the rectangle
+    cv::imshow("Detected Center", cropped_main_monopoly_image);
+    cv::waitKey(0);
 
 
-    cv::Mat equalizedImage =  filterShinyGrayHSV(cropped_main_monopoly_image);
-    findGamePiece(equalizedImage, HAT_image, 0.3);
+    // cv::Mat equalizedImage =  filterShinyGrayHSV(cropped_main_monopoly_image);
+    // findGamePiece(equalizedImage, HAT_image, 0.3);
 
     // Display results
     cv::imshow("Original Image", cropped_main_monopoly_image);
-    cv::imshow("Lighting Equalized Image", equalizedImage);
+    cv::imshow("Lighting Equalized Image", alignedBoard);
     cv::waitKey(0);
 
     return 0;

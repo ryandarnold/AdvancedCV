@@ -307,4 +307,59 @@ void measureFPS(int CAMERA_INDEX)
     cv::destroyAllWindows();
 }
 
-
+//below is working SIFT code that i'm storing in case the new chatgpt code doesn't work!
+// cv::Mat SIFT_forGameBoardAlignment(cv::Mat mainBoardTemplateImage, cv::Mat currentFrameImage)
+// {
+//     //this function will try to warp the current frame image to match the main board template image
+//     //using the SIFT algorithm, so that they're aligned as much as possible
+//
+//
+//     // Create SIFT detector
+//     cv::Ptr<cv::SIFT> sift = cv::SIFT::create();
+//
+//     // Detect keypoints and compute descriptors
+//     std::vector<cv::KeyPoint> kp1, kp2;
+//     cv::Mat des1, des2;
+//     sift->detectAndCompute(mainBoardTemplateImage, cv::noArray(), kp1, des1);
+//     sift->detectAndCompute(currentFrameImage, cv::noArray(), kp2, des2);
+//
+//     // Use FLANN-based matcher
+//     cv::FlannBasedMatcher matcher;
+//     std::vector<std::vector<cv::DMatch>> knn_matches;
+//     matcher.knnMatch(des1, des2, knn_matches, 2);  // Find 2 nearest matches for each descriptor
+//
+//     // Apply Lowe’s Ratio Test
+//     std::vector<cv::DMatch> good_matches;
+//     for (auto& m : knn_matches) {
+//         if (m[0].distance < 0.75 * m[1].distance) {  // Lowe's Ratio Test
+//             good_matches.push_back(m[0]);
+//         }
+//     }
+//
+//     // Ensure enough good matches exist for homography
+//     if (good_matches.size() < 10) {
+//         //std::cout << "Error: Not enough good matches to compute homography!" << std::endl;
+//         throw std::invalid_argument("Error: Not enough good matches to compute homography!");
+//     }
+//
+//     // Extract keypoint coordinates
+//     std::vector<cv::Point2f> src_pts, dst_pts;
+//     for (auto& match : good_matches) {
+//         src_pts.push_back(kp1[match.queryIdx].pt); // Points in the original Monopoly board image
+//         dst_pts.push_back(kp2[match.trainIdx].pt); // Corresponding points in the second image
+//     }
+//
+//     // Compute homography using RANSAC
+//     cv::Mat M = cv::findHomography(dst_pts, src_pts, cv::RANSAC);
+//
+//     if (M.empty()) {
+//         throw std::invalid_argument("Error: Homography computation failed!");
+//     }
+//
+//     // Warp the second image to align with the original board image
+//     cv::Mat aligned_scene;
+//     cv::warpPerspective(currentFrameImage, aligned_scene, M, mainBoardTemplateImage.size());
+//
+//     return aligned_scene;
+// }
+//above is working SIFT code that i'm storing in case the new chatgpt code doesn't work!
