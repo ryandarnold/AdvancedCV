@@ -363,3 +363,73 @@ void measureFPS(int CAMERA_INDEX)
 //     return aligned_scene;
 // }
 //above is working SIFT code that i'm storing in case the new chatgpt code doesn't work!
+
+//below is SIFT code that outputs the warped image and the center point of the matched points
+// tuple<cv::Mat, cv::Point2f> SIFT_forGameBoardAlignment(cv::Mat mainBoardTemplateImage, cv::Mat currentFrameImage)
+// {
+//     // 🔹 Step 1: Convert to Grayscale
+//     cv::Mat edgesTemplate, edgesFrame;
+//     cv::cvtColor(mainBoardTemplateImage, edgesTemplate, cv::COLOR_BGR2GRAY);
+//     cv::cvtColor(currentFrameImage, edgesFrame, cv::COLOR_BGR2GRAY);
+//
+//     // 🔹 Step 2: Apply Canny Edge Detection
+//     cv::Canny(edgesTemplate, edgesTemplate, 50, 150);
+//     cv::Canny(edgesFrame, edgesFrame, 50, 150);
+//
+//     // 🔹 Step 3: Create SIFT detector
+//     cv::Ptr<cv::SIFT> sift = cv::SIFT::create();
+//
+//     // 🔹 Step 4: Detect keypoints & compute descriptors **on edge-detected images**
+//     std::vector<cv::KeyPoint> kp1, kp2;
+//     cv::Mat des1, des2;
+//     sift->detectAndCompute(edgesTemplate, cv::noArray(), kp1, des1);
+//     sift->detectAndCompute(edgesFrame, cv::noArray(), kp2, des2);
+//
+//     // 🔹 Step 5: Use FLANN-based matcher
+//     cv::FlannBasedMatcher matcher;
+//     std::vector<std::vector<cv::DMatch>> knn_matches;
+//     matcher.knnMatch(des1, des2, knn_matches, 2);
+//
+//     // 🔹 Step 6: Apply Lowe’s Ratio Test
+//     std::vector<cv::DMatch> good_matches;
+//     for (auto& m : knn_matches) {
+//         if (m[0].distance < 0.5 * m[1].distance) {
+//             good_matches.push_back(m[0]);
+//         }
+//     }
+//
+//     // 🔹 Step 7: Ensure enough good matches exist for homography
+//     if (good_matches.size() < 10) {
+//         throw std::invalid_argument("Error: Not enough good matches to compute homography!");
+//     }
+//
+//     // 🔹 Step 8: Extract keypoint coordinates
+//     std::vector<cv::Point2f> src_pts, dst_pts;
+//     for (auto& match : good_matches) {
+//         src_pts.push_back(kp1[match.queryIdx].pt); // Points in mainBoardTemplateImage
+//         dst_pts.push_back(kp2[match.trainIdx].pt); // Points in currentFrameImage
+//     }
+//
+//     // 🔹 Step 9: Compute homography using RANSAC
+//     cv::Mat M = cv::findHomography(dst_pts, src_pts, cv::RANSAC);
+//     if (M.empty()) {
+//         throw std::invalid_argument("Error: Homography computation failed!");
+//     }
+//
+//     // 🔹 Step 10: Warp the current frame to align with the template
+//     cv::Mat aligned_scene;
+//     cv::warpPerspective(currentFrameImage, aligned_scene, M, mainBoardTemplateImage.size());
+//
+//     // 🔹 Step 11: Calculate the center of matched points in `mainBoardTemplateImage`
+//     cv::Point2f center(0, 0);
+//     for (const auto& pt : src_pts) {
+//         center.x += pt.x;
+//         center.y += pt.y;
+//     }
+//     center.x /= src_pts.size();
+//     center.y /= src_pts.size();
+//
+//     return {aligned_scene, center};
+// }
+
+//above is SIFT code that outputs the warped image and the center point of the matched points
