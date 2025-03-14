@@ -198,73 +198,8 @@ cv::Mat crop_out_background(cv::Mat current_frame)
 }
 
 
-void liveVideoOfMonopolyBoard(cv::Mat main_monopoly_image, cv::Mat camera_matrix, cv::Mat dist_coeffs)
-{
-    //this will be the main loop that will run the game and display the game board
-    cv::VideoCapture cap(CAMERA_INDEX);
-    cap.set(cv::CAP_PROP_FRAME_WIDTH, 1024);
-    cap.set(cv::CAP_PROP_FRAME_HEIGHT, 768); // worked very well
-    cap.set(cv::CAP_PROP_FPS, 60);
-
-    cv::Mat currentFrame, undistorted_current_frame, warped_current_video_frame;
-    cv::Mat cropped_board = cv::Mat::zeros(main_monopoly_image.rows, main_monopoly_image.cols, CV_8UC3);  // For a 3-channel image
-
-    double Scale = 0.7;
-    int current_frame_count = 0;
-
-    // string HAT = "../main_hat_picture_undistorted.jpg";
-    // cv::Mat gamePiece_HAT =  cv::imread(HAT, cv::IMREAD_COLOR);
-    while (true) {
-        current_frame_count++;
-        cap >> currentFrame; // grab new video frame
-
-        cv::undistort(currentFrame, undistorted_current_frame, camera_matrix, dist_coeffs);
-        if (current_frame_count % 3 == 0) //only do SIFT every 3 frames because it is computationally expensive
-        {
-            warped_current_video_frame = SIFT_forGameBoardAlignment(main_monopoly_image, undistorted_current_frame);
-            cropped_board = crop_out_background(warped_current_video_frame);
-            //need to rotate because SIFT changes the rotation
-            cv::rotate(cropped_board, cropped_board, cv::ROTATE_90_COUNTERCLOCKWISE);
-        }
-        display_video_frame(cropped_board, Scale, "Live Camera Feed");
-
-        if (int key = cv::waitKey(33); key >= 0) { break;} // displays at 30FPS
-    }
-
-    cap.release(); // Release the camera
-    cv::destroyAllWindows(); // Close OpenCV windows
-}
 
 
-// void findGamePiece(cv::Mat mainMonopolyBoard, cv::Mat gamePieceTemplate, double threshold = 0.8) {
-//     //This function does template matching to find the game piece on the game board
-//
-//     // Result matrix
-//     cv::Mat result;
-//     cv::matchTemplate(mainMonopolyBoard, gamePieceTemplate, result, cv::TM_CCOEFF_NORMED);
-//
-//     // Find best match location
-//     double minVal, maxVal;
-//     cv::Point minLoc, maxLoc;
-//     cv::minMaxLoc(result, &minVal, &maxVal, &minLoc, &maxLoc);
-//
-//     std::cout << "Best match score: " << maxVal << std::endl;
-//
-//     // Apply threshold to filter false positives
-//     if (maxVal >= threshold) {
-//         // Draw rectangle only if confidence is high
-//         cv::rectangle(mainMonopolyBoard, maxLoc,
-//                       cv::Point(maxLoc.x + gamePieceTemplate.cols, maxLoc.y + gamePieceTemplate.rows),
-//                       cv::Scalar(0, 255, 0), 3);
-//         std::cout << "Game piece detected at: " << maxLoc << std::endl;
-//     } else {
-//         std::cerr << "No good match found! Try lowering the threshold." << std::endl;
-//     }
-//
-//     // Show result
-//     cv::imshow("Detected Game Piece", mainMonopolyBoard);
-//     cv::waitKey(0);
-// }
 
 // Helper function to rotate the template image
 cv::Mat rotateImage(cv::Mat& image, int angle)
@@ -282,16 +217,22 @@ cv::Point2f findPinkPostIt(cv::Mat mainMonopolyBoard, cv::Mat gamePieceTemplate,
     //(x,y) points of the PINK post-it note. The calling function should then draw any necessary bounding boxes or
     //red dots to track location
 
-    if (gamePieceTemplate.cols > mainMonopolyBoard.cols || gamePieceTemplate.rows > mainMonopolyBoard.rows)
-    {
-        throw std::runtime_error("Custom error: Template is larger than the image!");
-    }
+    cv::Mat hsvImage, mask;
+    cv::cvtColor(mainMonopolyBoard, hsvImage, cv::COLOR_BGR2HSV);
+
+    // Define HSV range for pink (adjust values if needed)
+    //filter out the non-pink colors so template matching works much better
+    cv::Scalar lowerPink(10, 50, 140);   // Adjusted lower bound
+    cv::Scalar upperPink(30, 180, 255);  // Adjusted upper bound
+
+    cv::inRange(hsvImage, lowerPink, upperPink, mask);
+    cv::bitwise_and(mainMonopolyBoard, mainMonopolyBoard, mainMonopolyBoard, mask);
 
     // 🔹 Resize template to 1/4.5 of original size
     cv::Mat resizedTemplate;
     double scaleFactor = 1.0 / 4.5; // had to resize because the template was WAY too big compared to actual game piece
     cv::resize(gamePieceTemplate, resizedTemplate, cv::Size(), scaleFactor, scaleFactor, cv::INTER_LINEAR);
-    std::cout << "Resized Template Size: " << resizedTemplate.cols << " x " << resizedTemplate.rows << std::endl;
+    // std::cout << "Resized Template Size: " << resizedTemplate.cols << " x " << resizedTemplate.rows << std::endl;
 
     double bestMatchScore = 0;
     cv::Point bestMatchLoc;
@@ -304,7 +245,7 @@ cv::Point2f findPinkPostIt(cv::Mat mainMonopolyBoard, cv::Mat gamePieceTemplate,
     {
         cv::Mat rotatedTemplate = rotateImage(resizedTemplate, angle);
 
-        std::cout << "Rotating template by " << angle << " degrees." << std::endl;
+        // std::cout << "Rotating template by " << angle << " degrees." << std::endl;
 
         // Perform Template Matching
         cv::Mat result;
@@ -315,7 +256,7 @@ cv::Point2f findPinkPostIt(cv::Mat mainMonopolyBoard, cv::Mat gamePieceTemplate,
         cv::Point minLoc, maxLoc;
         cv::minMaxLoc(result, &minVal, &maxVal, &minLoc, &maxLoc);
 
-        std::cout << "Rotation: " << angle << "° | Match score: " << maxVal << std::endl;
+        // std::cout << "Rotation: " << angle << "° | Match score: " << maxVal << std::endl;
 
         // Check if the current match score is better
         if (maxVal > bestMatchScore)
@@ -333,7 +274,7 @@ cv::Point2f findPinkPostIt(cv::Mat mainMonopolyBoard, cv::Mat gamePieceTemplate,
         cv::Point2f center(bestMatchLoc.x + bestMatchSize.width / 2.0,
                            bestMatchLoc.y + bestMatchSize.height / 2.0);
 
-        cout << "Game piece detected at: " << bestMatchLoc << " | Center: " << center << " | Rotation: " << bestRotationAngle << "°" << std::endl;
+        // cout << "Game piece detected at: " << bestMatchLoc << " | Center: " << center << " | bestMatchScore: " << bestMatchScore << std::endl;
 
         // 🔹 Draw a small circle at the center of the detected game piece
         // cv::circle(mainMonopolyBoard, center, 5, cv::Scalar(0, 0, 255), -1); // Red dot
@@ -352,18 +293,17 @@ void findAndDisplayPinkPostIt(cv::Mat mainMonopolyBoard, cv::Mat gamePieceTempla
 {
     cv::Point2f pinkPostItCenter = findPinkPostIt(mainMonopolyBoard, gamePieceTemplate, threshold);
     cv::Point2f center(pinkPostItCenter.x, pinkPostItCenter.y);
-    cv::circle(mainMonopolyBoard, center, 5, cv::Scalar(0, 0, 255), -1); // Red dot
-
-    display_image(mainMonopolyBoard, 1.0, "Detected Game Piece");
+    cv::circle(mainMonopolyBoard, center, 5, cv::Scalar(0, 0, 255), -1);
 }
 
-void findGamePiece(cv::Mat mainMonopolyBoard, cv::Mat gamePieceTemplate, double threshold = 0.8)
+void findAllGamePieces(cv::Mat current_monopoly_board_image, cv::Mat gamePieceTemplate)
 {
-    findAndDisplayPinkPostIt(mainMonopolyBoard, gamePieceTemplate, 0.8);
+    //current_monopoly_board_image is the undistorted and cropped image of the game board (that has the game pieces on it)
+    //PINK_PostIt_Image is the game piece that we're trying to detect on the game board (the pink post it)
+
+    findAndDisplayPinkPostIt(current_monopoly_board_image, gamePieceTemplate, 0.8);
+
 }
-
-
-
 
 void findHatPieceEdges(cv::Mat mainMonopolyBoard, cv::Mat gamePieceTemplate, double threshold = 0.8)
 {
@@ -504,7 +444,7 @@ cv::Mat filterShinyGrayHSV(const cv::Mat& inputImage) {
     return result;
 }
 
-void detectGamePiece()
+void detectGamePieces(cv::Mat current_monopoly_board_image, cv::Mat PINK_PostIt_Image)
 {
     //below does NOT work-------------------------------------------
     // findGamePiece(cropped_main_monopoly_image, HAT_image, 0.15); //uses simple template matching in all color
@@ -514,26 +454,28 @@ void detectGamePiece()
     // cv::Mat equalizedImage = filterColorHSV(cropped_main_monopoly_image, lowerBlack, upperBlack);
     //above does NOT work-------------------------------------------
 
-    string PINK_PostIt_Path = "../singlePINK_PostIt_cropped.jpg";
 
-    cv::Mat PINK_PostIt_Image = cv::imread(PINK_PostIt_Path, cv::IMREAD_COLOR);
+
+
+    //*************************************************************************************************************
 
     // step 2: load in the current monopoly board that has the HAT game piece on it
-    string current_monopoly_board_path = "../singleFrameOfPINK_PostIt_OnMonopolyBoard_LEFT_distorted.jpg";
-    cv::Mat current_monopoly_board_image = cv::imread(current_monopoly_board_path, cv::IMREAD_COLOR);
-
-    //step 3: undistort the current monopoly board image
-    tuple<cv::Mat, cv::Mat> camera_values = findIntrinsicCameraMatrices();
-    cv::Mat camera_matrix = get<0>(camera_values);
-    cv::Mat dist_coeffs = get<1>(camera_values);
-    cv::Mat undistorted_main_image;
-    cv::undistort(current_monopoly_board_image, undistorted_main_image, camera_matrix, dist_coeffs);
-
-    //step 4: crop out the background of the undistorted monopoly board image
-    cv::Mat cropped_main_monopoly_image = crop_out_background(undistorted_main_image);
-    display_image(cropped_main_monopoly_image, 0.5, "Cropped Monopoly Board");
-    //step 5: now to try to detect the HAT game piece on the undistorted and cropped monopoly board image
-    findGamePiece(cropped_main_monopoly_image, PINK_PostIt_Image, 0.9);
+    // string current_monopoly_board_path = "../singleFrameOfPINK_PostIt_OnMonopolyBoard_LEFT_distorted.jpg";
+    // cv::Mat current_monopoly_board_image = cv::imread(current_monopoly_board_path, cv::IMREAD_COLOR);
+    //
+    // //step 3: undistort the current monopoly board image
+    // tuple<cv::Mat, cv::Mat> camera_values = findIntrinsicCameraMatrices();
+    // cv::Mat camera_matrix = get<0>(camera_values);
+    // cv::Mat dist_coeffs = get<1>(camera_values);
+    // cv::Mat undistorted_main_image;
+    // cv::undistort(current_monopoly_board_image, undistorted_main_image, camera_matrix, dist_coeffs);
+    //
+    // //step 4: crop out the background of the undistorted monopoly board image
+    // cv::Mat cropped_main_monopoly_image = crop_out_background(undistorted_main_image);
+    // display_image(cropped_main_monopoly_image, 0.5, "Cropped Monopoly Board");
+    // //step 5: now to try to detect the HAT game piece on the undistorted and cropped monopoly board image
+    // findAllGamePieces(cropped_main_monopoly_image, PINK_PostIt_Image);
+//*******************************************************************************************************************
 
     // cv::Mat warped_thing = SIFT_forGameBoardAlignment(cropped_main_monopoly_image, HAT_image);
     //BELOW IS FOR SIFT**************************************************************************************
@@ -558,6 +500,46 @@ void detectGamePiece()
     // cv::waitKey(0);
     //ABOVE IS FOR SIFT**************************************************************************************
 
+}
+
+void liveVideoOfMonopolyBoard(cv::Mat main_monopoly_image, cv::Mat camera_matrix, cv::Mat dist_coeffs,
+    cv::Mat PINK_PostIt_Image)
+{
+    //this will be the main loop that will run the game and display the game board
+    cv::VideoCapture cap(CAMERA_INDEX);
+    cap.set(cv::CAP_PROP_FRAME_WIDTH, 1024);
+    cap.set(cv::CAP_PROP_FRAME_HEIGHT, 768); // worked very well
+    cap.set(cv::CAP_PROP_FPS, 60);
+
+    cv::Mat currentFrame, undistorted_current_frame, warped_current_video_frame;
+    cv::Mat cropped_board = cv::Mat::zeros(main_monopoly_image.rows, main_monopoly_image.cols, CV_8UC3);  // For a 3-channel image
+
+    double Scale = 0.7;
+    int current_frame_count = 0;
+
+    // string HAT = "../main_hat_picture_undistorted.jpg";
+    // cv::Mat gamePiece_HAT =  cv::imread(HAT, cv::IMREAD_COLOR);
+    while (true) {
+        current_frame_count++;
+        cap >> currentFrame; // grab new video frame
+
+        cv::undistort(currentFrame, undistorted_current_frame, camera_matrix, dist_coeffs);
+        if (current_frame_count % 3 == 0) //only do SIFT every 3 frames because it is computationally expensive
+        {
+            warped_current_video_frame = SIFT_forGameBoardAlignment(main_monopoly_image, undistorted_current_frame);
+            cropped_board = crop_out_background(warped_current_video_frame);
+            //need to rotate because SIFT changes the rotation
+            cv::rotate(cropped_board, cropped_board, cv::ROTATE_90_COUNTERCLOCKWISE);
+            //here i should call 'findAllGamePieces()' function
+            findAllGamePieces(cropped_board, PINK_PostIt_Image);
+        }
+        display_video_frame(cropped_board, Scale, "Live Camera Feed");
+
+        if (int key = cv::waitKey(33); key >= 0) { break;} // displays at 30FPS
+    }
+
+    cap.release(); // Release the camera
+    cv::destroyAllWindows(); // Close OpenCV windows
 }
 
 int main()
@@ -591,20 +573,33 @@ int main()
 
     //below is main code for the game-------------------------------------------------------
 
+    //Step 1: load in the camera intrinsics
     tuple<cv::Mat, cv::Mat> camera_values = findIntrinsicCameraMatrices();
     cv::Mat camera_matrix = get<0>(camera_values);
     cv::Mat dist_coeffs = get<1>(camera_values);
 
+    //Step 2: load in main monopoly board template to use for SIFT (later)
     string main_monopoly_pic = "../../../updatedMainMonopolyImage.jpg";
     // string scene_image = "../distorted_angled_main_monopoly_picture.jpg";
     cv::Mat main_monopoly_image = cv::imread(main_monopoly_pic, cv::IMREAD_COLOR);
     // cv::Mat current_scene_image = cv::imread(scene_image, cv::IMREAD_COLOR);
 
+    //Step 3: undistort the main monopoly board image template
     cv::Mat undistorted_main_image;
     cv::undistort(main_monopoly_image, undistorted_main_image, camera_matrix, dist_coeffs);
+
+    //Step 4: crop out the background of the undistorted monopoly board image so the whole image is just monopoly board
     cv::Mat cropped_main_monopoly_image = crop_out_background(undistorted_main_image);
-    detectGamePiece();
-    liveVideoOfMonopolyBoard(cropped_main_monopoly_image, camera_matrix, dist_coeffs);
+
+    //Step 5: load in the game piece templates
+    //load in PINK post it piece
+    string PINK_PostIt_Path = "../singlePINK_PostIt_cropped.jpg";
+    cv::Mat PINK_PostIt_Image = cv::imread(PINK_PostIt_Path, cv::IMREAD_COLOR);
+
+
+
+
+    liveVideoOfMonopolyBoard(cropped_main_monopoly_image, camera_matrix, dist_coeffs, PINK_PostIt_Image);
     //above is main code for the game-------------------------------------------------------
     return 0;
 }
