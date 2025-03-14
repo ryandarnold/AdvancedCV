@@ -516,7 +516,7 @@ void detectGamePiece()
 
     string PINK_PostIt_Path = "../singlePINK_PostIt_cropped.jpg";
 
-    cv::Mat HAT_image = cv::imread(PINK_PostIt_Path, cv::IMREAD_COLOR);
+    cv::Mat PINK_PostIt_Image = cv::imread(PINK_PostIt_Path, cv::IMREAD_COLOR);
 
     // step 2: load in the current monopoly board that has the HAT game piece on it
     string current_monopoly_board_path = "../singleFrameOfPINK_PostIt_OnMonopolyBoard_LEFT_distorted.jpg";
@@ -533,7 +533,7 @@ void detectGamePiece()
     cv::Mat cropped_main_monopoly_image = crop_out_background(undistorted_main_image);
     display_image(cropped_main_monopoly_image, 0.5, "Cropped Monopoly Board");
     //step 5: now to try to detect the HAT game piece on the undistorted and cropped monopoly board image
-    findGamePiece(cropped_main_monopoly_image, HAT_image, 0.9);
+    findGamePiece(cropped_main_monopoly_image, PINK_PostIt_Image, 0.9);
 
     // cv::Mat warped_thing = SIFT_forGameBoardAlignment(cropped_main_monopoly_image, HAT_image);
     //BELOW IS FOR SIFT**************************************************************************************
@@ -603,6 +603,7 @@ int main()
     cv::Mat undistorted_main_image;
     cv::undistort(main_monopoly_image, undistorted_main_image, camera_matrix, dist_coeffs);
     cv::Mat cropped_main_monopoly_image = crop_out_background(undistorted_main_image);
+    detectGamePiece();
     liveVideoOfMonopolyBoard(cropped_main_monopoly_image, camera_matrix, dist_coeffs);
     //above is main code for the game-------------------------------------------------------
     return 0;
