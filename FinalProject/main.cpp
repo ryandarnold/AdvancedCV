@@ -289,19 +289,95 @@ cv::Point2f findPinkPostIt(cv::Mat mainMonopolyBoard, cv::Mat gamePieceTemplate,
     }
 }
 
-void findAndDisplayPinkPostIt(cv::Mat mainMonopolyBoard, cv::Mat gamePieceTemplate, double threshold)
+cv::Point2f findBeigePostIt(cv::Mat& mainMonopolyBoard, cv::Mat BEIGE_PostIt_Image, double threshold = 0.8)
 {
-    cv::Point2f pinkPostItCenter = findPinkPostIt(mainMonopolyBoard, gamePieceTemplate, threshold);
+    // Resize template to 1/6th of its original size
+    cv::Mat resizedTemplate;
+    double scaleFactor = 1.0 / 7.5;
+    cv::resize(BEIGE_PostIt_Image, resizedTemplate, cv::Size(), scaleFactor, scaleFactor, cv::INTER_LINEAR);
+
+    double bestMatchScore = 0;
+    cv::Point bestMatchLoc;
+    cv::Size bestMatchSize;
+    int bestRotationAngle = 0;
+    cv::Mat bestRotatedTemplate;
+
+    // 🔹 Try all rotations (0°, 90°, 180°, 270°)
+    std::vector<int> angles = {0, 90, 180, 270};
+    for (int angle : angles)
+    {
+        // Rotate the template
+        cv::Mat rotatedTemplate = rotateImage(resizedTemplate, angle);
+
+        // Perform Template Matching
+        cv::Mat result;
+        cv::matchTemplate(mainMonopolyBoard, rotatedTemplate, result, cv::TM_CCORR_NORMED);
+
+        // Find best match location
+        double minVal, maxVal;
+        cv::Point minLoc, maxLoc;
+        cv::minMaxLoc(result, &minVal, &maxVal, &minLoc, &maxLoc);
+
+        // Debugging: Print match scores for different angles
+        // std::cout << "Angle: " << angle << " | Match score: " << maxVal << std::endl;
+
+        // Check if this rotation is the best match so far
+        if (maxVal > bestMatchScore)
+        {
+            bestMatchScore = maxVal;
+            bestMatchLoc = maxLoc;
+            bestMatchSize = rotatedTemplate.size();  // Store correct size after rotation
+            bestRotationAngle = angle;
+            bestRotatedTemplate = rotatedTemplate.clone();
+        }
+    }
+
+    if (bestMatchScore >= threshold)
+    {
+        // 🔹 Find the Center of the Best-Matched Template
+        cv::Point2f center(bestMatchLoc.x + bestMatchSize.width / 2.0,
+                           bestMatchLoc.y + bestMatchSize.height / 2.0);
+
+        // std::cout << "Best match found at: " << bestMatchLoc
+        //           << " | Center: " << center
+        //           << " | Rotation: " << bestRotationAngle << "°"
+        //           << " | Score: " << bestMatchScore << std::endl;
+
+        // 🔹 Draw the Correctly Rotated Bounding Box
+        cv::RotatedRect rotatedRect(center, bestMatchSize, bestRotationAngle);
+        cv::Point2f rectPoints[4];
+        rotatedRect.points(rectPoints);
+
+        for (int i = 0; i < 4; i++)
+            cv::line(mainMonopolyBoard, rectPoints[i], rectPoints[(i + 1) % 4], cv::Scalar(0, 255, 0), 2);
+
+        return center;
+    }
+}
+
+
+
+void findAndDisplayPINKPostIt(cv::Mat mainMonopolyBoard, cv::Mat PINK_PostIt_Image, double threshold)
+{
+    cv::Point2f pinkPostItCenter = findPinkPostIt(mainMonopolyBoard, PINK_PostIt_Image, threshold);
     cv::Point2f center(pinkPostItCenter.x, pinkPostItCenter.y);
     cv::circle(mainMonopolyBoard, center, 5, cv::Scalar(0, 0, 255), -1);
 }
 
-void findAllGamePieces(cv::Mat current_monopoly_board_image, cv::Mat gamePieceTemplate)
+void findAndDisplayBEIGEPostIt(cv::Mat mainMonopolyBoard, cv::Mat BEIGE_PostIt_Image, double threshold)
+{
+    cv::Point2f beigePostItCenter = findBeigePostIt(mainMonopolyBoard, BEIGE_PostIt_Image, threshold);
+    cv::Point2f center(beigePostItCenter.x, beigePostItCenter.y);
+    cv::circle(mainMonopolyBoard, center, 5, cv::Scalar(255, 0, 255), -1);
+}
+
+void findAllGamePieces(cv::Mat current_monopoly_board_image, cv::Mat PINK_PostIt_Image, cv::Mat BEIGE_PostIt_Image)
 {
     //current_monopoly_board_image is the undistorted and cropped image of the game board (that has the game pieces on it)
     //PINK_PostIt_Image is the game piece that we're trying to detect on the game board (the pink post it)
 
-    findAndDisplayPinkPostIt(current_monopoly_board_image, gamePieceTemplate, 0.8);
+    findAndDisplayPINKPostIt(current_monopoly_board_image, PINK_PostIt_Image, 0.8);
+    findAndDisplayBEIGEPostIt(current_monopoly_board_image, BEIGE_PostIt_Image, 0.8);
 
 }
 
@@ -503,7 +579,7 @@ void detectGamePieces(cv::Mat current_monopoly_board_image, cv::Mat PINK_PostIt_
 }
 
 void liveVideoOfMonopolyBoard(cv::Mat main_monopoly_image, cv::Mat camera_matrix, cv::Mat dist_coeffs,
-    cv::Mat PINK_PostIt_Image)
+    cv::Mat PINK_PostIt_Image, cv::Mat BEIGE_PostIt_Image)
 {
     //this will be the main loop that will run the game and display the game board
     cv::VideoCapture cap(CAMERA_INDEX);
@@ -531,7 +607,7 @@ void liveVideoOfMonopolyBoard(cv::Mat main_monopoly_image, cv::Mat camera_matrix
             //need to rotate because SIFT changes the rotation
             cv::rotate(cropped_board, cropped_board, cv::ROTATE_90_COUNTERCLOCKWISE);
             //here i should call 'findAllGamePieces()' function
-            findAllGamePieces(cropped_board, PINK_PostIt_Image);
+            findAllGamePieces(cropped_board, PINK_PostIt_Image, BEIGE_PostIt_Image);
         }
         display_video_frame(cropped_board, Scale, "Live Camera Feed");
 
@@ -548,14 +624,13 @@ int main()
 
 
     // detectGamePiece();
-    // takeASinglePicture(CAMERA_INDEX, "../singleRED_PostIt_uncropped.jpg");
+    // takeASinglePicture(CAMERA_INDEX, "../singleBEIGE_PostIt_uncropped.jpg");
     // takeASinglePicture(CAMERA_INDEX, "../singleFrameOfRED_PostIt_OnMonopolyBoard_LEFT_distorted.jpg");
 
 
     // return 0;
     //above is for testing----------------------------------------------------------
 
-    // return 0;
     // 1) note to myself: I still need to test the SIFT at 30FPS and make sure it doesn't lag
     //      and if it does lag, then try only doing SIFT every 5 frames or something -- WORKS DOING SIFT EVERY 3 FRAMES
     //TODO: 2) still need to take pictures of each of the game board pieces and see if SIFT can detect them
@@ -596,10 +671,13 @@ int main()
     string PINK_PostIt_Path = "../singlePINK_PostIt_cropped.jpg";
     cv::Mat PINK_PostIt_Image = cv::imread(PINK_PostIt_Path, cv::IMREAD_COLOR);
 
+    //load in BEIGE post it piece
+    string BEIGE_PostIt_Path = "../singleBEIGE_PostIt_cropped.jpg";
+    cv::Mat BEIGE_PostIt_Image = cv::imread(BEIGE_PostIt_Path, cv::IMREAD_COLOR);
 
 
-
-    liveVideoOfMonopolyBoard(cropped_main_monopoly_image, camera_matrix, dist_coeffs, PINK_PostIt_Image);
+    liveVideoOfMonopolyBoard(cropped_main_monopoly_image, camera_matrix, dist_coeffs,
+        PINK_PostIt_Image, BEIGE_PostIt_Image);
     //above is main code for the game-------------------------------------------------------
     return 0;
 }
