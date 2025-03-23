@@ -1,0 +1,3 @@
+C:/Users/RyanA/CLionProjects/Advanced_CV/FinalProject/AdvancedCV/HW3/cmake-build-debug/CMakeFiles/HW3.dir
+C:/Users/RyanA/CLionProjects/Advanced_CV/FinalProject/AdvancedCV/HW3/cmake-build-debug/CMakeFiles/edit_cache.dir
+C:/Users/RyanA/CLionProjects/Advanced_CV/FinalProject/AdvancedCV/HW3/cmake-build-debug/CMakeFiles/rebuild_cache.dir
