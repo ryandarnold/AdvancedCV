@@ -359,9 +359,48 @@ cv::Point2f findBeigePostIt(cv::Mat& mainMonopolyBoard, cv::Mat BEIGE_PostIt_Ima
 
 void findAndDisplayPINKPostIt(cv::Mat mainMonopolyBoard, cv::Mat PINK_PostIt_Image, double threshold)
 {
-    cv::Point2f pinkPostItCenter = findPinkPostIt(mainMonopolyBoard, PINK_PostIt_Image, threshold);
-    cv::Point2f center(pinkPostItCenter.x, pinkPostItCenter.y);
-    cv::circle(mainMonopolyBoard, center, 5, cv::Scalar(0, 0, 255), -1);
+    //below is original code but doesn't work with "chance" cards section
+    // cv::Point2f pinkPostItCenter = findPinkPostIt(mainMonopolyBoard, PINK_PostIt_Image, threshold);
+    // cv::Point2f center(pinkPostItCenter.x, pinkPostItCenter.y);
+    // cv::circle(mainMonopolyBoard, center, 5, cv::Scalar(0, 0, 255), -1);
+    //above is original code but doesn't work with "chance" cards section
+
+
+    //below is new code for testing without chance card section
+    // Clone the board for masking during template matching
+    cv::Mat maskedBoard = mainMonopolyBoard.clone();
+
+    // Offsets to shift the mask position
+    int offsetX = 125; // move left from right edge
+    int offsetY = 120; // move up from bottom edge
+
+    int maskWidth = 125;
+    int maskHeight = 125;
+
+    // Compute top-left corner of the mask
+    int maskX = mainMonopolyBoard.cols - maskWidth - offsetX;
+    int maskY = mainMonopolyBoard.rows - maskHeight - offsetY;
+
+    // Prevent going out of bounds
+    maskX = std::max(0, maskX);
+    maskY = std::max(0, maskY);
+
+    // Create and apply the mask
+    cv::Rect maskRect(maskX, maskY, maskWidth, maskHeight);
+    maskedBoard(maskRect) = cv::Scalar(0, 0, 0);  // Apply black mask for template matching
+
+    //NOTE: this rectangle code is just for testing. all it does is draw a black rectangle
+    //to determine where the mask is being applied 
+    // cv::rectangle(mainMonopolyBoard, maskRect, cv::Scalar(0, 0, 0), cv::FILLED);
+
+
+    // Run template matching on the masked image
+    cv::Point2f pinkPostItCenter = findPinkPostIt(maskedBoard, PINK_PostIt_Image, threshold);
+
+    // If a match is found, draw a red dot
+    if (pinkPostItCenter.x != -1 && pinkPostItCenter.y != -1)
+        cv::circle(mainMonopolyBoard, pinkPostItCenter, 5, cv::Scalar(0, 0, 255), -1);
+    //above is new code for testing without chance card section
 }
 
 void findAndDisplayBEIGEPostIt(cv::Mat mainMonopolyBoard, cv::Mat BEIGE_PostIt_Image, double threshold)
