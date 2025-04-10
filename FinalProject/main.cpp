@@ -198,6 +198,55 @@ cv::Mat crop_out_background(cv::Mat current_frame)
 }
 
 
+cv::Mat equalizeBoardLighting(const cv::Mat& inputImage)
+{
+    // Convert from BGR to LAB color space
+    cv::Mat labImage;
+    cv::cvtColor(inputImage, labImage, cv::COLOR_BGR2Lab);
+
+    // Split LAB into individual channels
+    std::vector<cv::Mat> labChannels(3);
+    cv::split(labImage, labChannels);
+
+    // Equalize or normalize the L channel (brightness)
+    // Option 1: Histogram equalization (stronger, may affect contrast)
+    // cv::equalizeHist(labChannels[0], labChannels[0]);
+
+    // Option 2: Normalize (smoother results, recommended for your use)
+    cv::normalize(labChannels[0], labChannels[0], 0, 255, cv::NORM_MINMAX);
+
+    // Merge the channels back
+    cv::Mat equalizedLab;
+    cv::merge(labChannels, equalizedLab);
+
+    // Convert back to BGR
+    cv::Mat outputImage;
+    cv::cvtColor(equalizedLab, outputImage, cv::COLOR_Lab2BGR);
+
+    return outputImage;
+}
+
+cv::Mat equalizeLightingLABColor(const cv::Mat& inputImage) {
+    cv::Mat lab;
+    cv::cvtColor(inputImage, lab, cv::COLOR_BGR2Lab);
+
+    std::vector<cv::Mat> labChannels;
+    cv::split(lab, labChannels);  // L = brightness, a & b = color
+
+    // Blur to estimate lighting pattern on L channel
+    cv::Mat floatL, background, diff, normalized;
+    labChannels[0].convertTo(floatL, CV_32F);
+    cv::GaussianBlur(floatL, background, cv::Size(55, 55), 0);
+    diff = floatL - background;
+    cv::normalize(diff, normalized, 0, 255, cv::NORM_MINMAX);
+    normalized.convertTo(labChannels[0], CV_8U);  // Replace L with normalized version
+
+    // Merge channels and convert back to BGR
+    cv::merge(labChannels, lab);
+    cv::Mat result;
+    cv::cvtColor(lab, result, cv::COLOR_Lab2BGR);
+    return result;
+}
 
 
 
@@ -356,13 +405,16 @@ cv::Point2f findBeigePostIt(cv::Mat& mainMonopolyBoard, cv::Mat BEIGE_PostIt_Ima
 }
 
 
-
 void findAndDisplayPINKPostIt(cv::Mat mainMonopolyBoard, cv::Mat PINK_PostIt_Image, double threshold)
 {
     //below is original code but doesn't work with "chance" cards section
-    // cv::Point2f pinkPostItCenter = findPinkPostIt(mainMonopolyBoard, PINK_PostIt_Image, threshold);
+    // cv::Mat lightingFixedBoard = equalizeBoardLighting(mainMonopolyBoard);
+    // cv::Mat normalizedBoardLighting = equalizeLightingLABColor(mainMonopolyBoard);
+    // display_video_frame(normalizedBoardLighting, 1, "Normalized Board Lightinghhh");
+    // // cv::Point2f pinkPostItCenter = findPinkPostIt(mainMonopolyBoard, PINK_PostIt_Image, threshold);
+    // cv::Point2f pinkPostItCenter = findPinkPostIt(normalizedBoardLighting, PINK_PostIt_Image, threshold);
     // cv::Point2f center(pinkPostItCenter.x, pinkPostItCenter.y);
-    // cv::circle(mainMonopolyBoard, center, 5, cv::Scalar(0, 0, 255), -1);
+    // cv::circle(mainMonopolyBoard, center, 10, cv::Scalar(0, 0, 255), -1);
     //above is original code but doesn't work with "chance" cards section
 
 
@@ -390,7 +442,7 @@ void findAndDisplayPINKPostIt(cv::Mat mainMonopolyBoard, cv::Mat PINK_PostIt_Ima
     maskedBoard(maskRect) = cv::Scalar(0, 0, 0);  // Apply black mask for template matching
 
     //NOTE: this rectangle code is just for testing. all it does is draw a black rectangle
-    //to determine where the mask is being applied 
+    //to determine where the mask is being applied
     // cv::rectangle(mainMonopolyBoard, maskRect, cv::Scalar(0, 0, 0), cv::FILLED);
 
 
@@ -399,15 +451,23 @@ void findAndDisplayPINKPostIt(cv::Mat mainMonopolyBoard, cv::Mat PINK_PostIt_Ima
 
     // If a match is found, draw a red dot
     if (pinkPostItCenter.x != -1 && pinkPostItCenter.y != -1)
-        cv::circle(mainMonopolyBoard, pinkPostItCenter, 5, cv::Scalar(0, 0, 255), -1);
+        //NOTE: Pink Post it is COLOR RED!!!!
+        cv::circle(mainMonopolyBoard, pinkPostItCenter, 10, cv::Scalar(0, 0, 255), -1);
     //above is new code for testing without chance card section
 }
 
 void findAndDisplayBEIGEPostIt(cv::Mat mainMonopolyBoard, cv::Mat BEIGE_PostIt_Image, double threshold)
 {
-    cv::Point2f beigePostItCenter = findBeigePostIt(mainMonopolyBoard, BEIGE_PostIt_Image, threshold);
+    //below is original code but doesn't work with highly refelective surface
+    // cv::Mat lightingFixedBoard = equalizeBoardLighting(mainMonopolyBoard);
+    cv::Mat normalizedBoardLighting = equalizeLightingLABColor(mainMonopolyBoard);
+    // display_video_frame(lightingFixedBoard, 1, "Lighting Fixed Board");
+    // cv::Point2f beigePostItCenter = findBeigePostIt(mainMonopolyBoard, BEIGE_PostIt_Image, threshold);
+    cv::Point2f beigePostItCenter = findBeigePostIt(normalizedBoardLighting, BEIGE_PostIt_Image, threshold);
     cv::Point2f center(beigePostItCenter.x, beigePostItCenter.y);
-    cv::circle(mainMonopolyBoard, center, 5, cv::Scalar(255, 0, 255), -1);
+    //NOTE: Beige Post it is COLOR MAGENTA!!!!
+    cv::circle(mainMonopolyBoard, center, 10, cv::Scalar(255, 0, 255), -1);
+    //above is original code but doesn't work with highly reflective surface
 }
 
 void findAllGamePieces(cv::Mat current_monopoly_board_image, cv::Mat PINK_PostIt_Image, cv::Mat BEIGE_PostIt_Image)
@@ -617,6 +677,16 @@ void detectGamePieces(cv::Mat current_monopoly_board_image, cv::Mat PINK_PostIt_
 
 }
 
+void findAndDisplayTenDollarBill(cv::Mat mainMonopolyBoard, cv::Mat TenDollar_Image)
+{
+
+}
+
+void trackAllMoney(cv::Mat mainMonopolyBoard, cv::Mat TenDollar_Image)
+{
+
+}
+
 void liveVideoOfMonopolyBoard(cv::Mat main_monopoly_image, cv::Mat camera_matrix, cv::Mat dist_coeffs,
     cv::Mat PINK_PostIt_Image, cv::Mat BEIGE_PostIt_Image)
 {
@@ -647,6 +717,7 @@ void liveVideoOfMonopolyBoard(cv::Mat main_monopoly_image, cv::Mat camera_matrix
             cv::rotate(cropped_board, cropped_board, cv::ROTATE_90_COUNTERCLOCKWISE);
             //here i should call 'findAllGamePieces()' function
             findAllGamePieces(cropped_board, PINK_PostIt_Image, BEIGE_PostIt_Image);
+
         }
         display_video_frame(cropped_board, Scale, "Live Camera Feed");
 
