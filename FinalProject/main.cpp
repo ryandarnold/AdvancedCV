@@ -405,6 +405,7 @@ cv::Point2f findBeigePostIt(cv::Mat& mainMonopolyBoard, cv::Mat BEIGE_PostIt_Ima
 }
 
 
+
 void findAndDisplayPINKPostIt(cv::Mat mainMonopolyBoard, cv::Mat PINK_PostIt_Image, double threshold)
 {
     //below is original code but doesn't work with "chance" cards section
@@ -524,6 +525,7 @@ void findHatPieceEdges(cv::Mat mainMonopolyBoard, cv::Mat gamePieceTemplate, dou
 }
 
 
+
 cv::Mat equalizeLightingLAB(const cv::Mat& inputImage) {
     // Convert to LAB color space
     cv::Mat labImage;
@@ -596,6 +598,7 @@ cv::Mat filterColorHSV(const cv::Mat& inputImage, cv::Scalar lowerBound, cv::Sca
 
     return result;
 }
+
 
 
 cv::Mat filterShinyGrayHSV(const cv::Mat& inputImage) {
@@ -677,18 +680,147 @@ void detectGamePieces(cv::Mat current_monopoly_board_image, cv::Mat PINK_PostIt_
 
 }
 
-void findAndDisplayTenDollarBill(cv::Mat mainMonopolyBoard, cv::Mat TenDollar_Image)
+cv::Point drawBoardCenterCrosshair(cv::Mat& boardImage)
 {
+    // Step 1: Compute center of the image
+    int centerX = boardImage.cols / 2;
+    int centerY = boardImage.rows / 2;
+    cv::Point center(centerX, centerY);
+
+    // Step 2: Draw black dot at center
+    cv::circle(boardImage, center, 5, cv::Scalar(0, 0, 0), -1);  // Black dot
+
+    // Step 3: Vertical line
+    cv::line(boardImage,
+             cv::Point(centerX, 0),
+             cv::Point(centerX, boardImage.rows),
+             cv::Scalar(0, 0, 0), 2);
+
+    // Step 4: Horizontal line
+    cv::line(boardImage,
+             cv::Point(0, centerY),
+             cv::Point(boardImage.cols, centerY),
+             cv::Scalar(0, 0, 0), 2);
+
+    // Return the center
+    return center;
+}
+
+
+cv::Point2f findTenDollarBill(cv::Mat mainMonopolyBoard, cv::Mat TenDollar_Image, double threshold)
+{
+    // Resize template to 1/6th of its original size
+    cv::Mat resizedTemplate;
+    double scaleFactor = 1.0 / 10;
+    cv::resize(TenDollar_Image, resizedTemplate, cv::Size(), scaleFactor, scaleFactor, cv::INTER_LINEAR);
+
+    double bestMatchScore = 0;
+    cv::Point bestMatchLoc;
+    cv::Size bestMatchSize;
+    int bestRotationAngle = 0;
+    cv::Mat bestRotatedTemplate;
+
+    // 🔹 Try all rotations (0°, 90°, 180°, 270°)
+    std::vector<int> angles = {0, 90, 180, 270};
+    for (int angle : angles)
+    {
+        // Rotate the template
+        cv::Mat rotatedTemplate = rotateImage(resizedTemplate, angle);
+
+        // Perform Template Matching
+        cv::Mat result;
+        cv::matchTemplate(mainMonopolyBoard, rotatedTemplate, result, cv::TM_CCORR_NORMED);
+
+        // Find best match location
+        double minVal, maxVal;
+        cv::Point minLoc, maxLoc;
+        cv::minMaxLoc(result, &minVal, &maxVal, &minLoc, &maxLoc);
+
+        // Debugging: Print match scores for different angles
+        // std::cout << "Angle: " << angle << " | Match score: " << maxVal << std::endl;
+
+        // Check if this rotation is the best match so far
+        if (maxVal > bestMatchScore)
+        {
+            bestMatchScore = maxVal;
+            bestMatchLoc = maxLoc;
+            bestMatchSize = rotatedTemplate.size();  // Store correct size after rotation
+            bestRotationAngle = angle;
+            bestRotatedTemplate = rotatedTemplate.clone();
+        }
+    }
+
+    if (bestMatchScore >= threshold)
+    {
+        // 🔹 Find the Center of the Best-Matched Template
+        cv::Point2f center(bestMatchLoc.x + bestMatchSize.width / 2.0,
+                           bestMatchLoc.y + bestMatchSize.height / 2.0);
+
+        // std::cout << "Best match found at: " << bestMatchLoc
+        //           << " | Center: " << center
+        //           << " | Rotation: " << bestRotationAngle << "°"
+        //           << " | Score: " << bestMatchScore << std::endl;
+
+        // 🔹 Draw the Correctly Rotated Bounding Box
+        cv::RotatedRect rotatedRect(center, bestMatchSize, bestRotationAngle);
+        cv::Point2f rectPoints[4];
+        rotatedRect.points(rectPoints);
+
+        for (int i = 0; i < 4; i++)
+            cv::line(mainMonopolyBoard, rectPoints[i], rectPoints[(i + 1) % 4], cv::Scalar(0, 255, 0), 2);
+
+        return center;
+    }
+}
+
+void findAndDisplayTenDollarBill(cv::Mat mainMonopolyBoard, cv::Mat TenDollar_Image, double threshold)
+{
+    cv::Mat normalizedBoardLighting = equalizeLightingLABColor(mainMonopolyBoard);
+    // Clone the board for masking during template matching
+    cv::Mat maskedBoard = normalizedBoardLighting.clone();
+
+    // Offsets to shift the mask position
+    int offsetX = 415; // increase value --> rectangle moves left
+    int offsetY = 425; // increase value --> rectangle moves up
+
+    int maskWidth = 125;
+    int maskHeight = 125;
+
+    // Compute top-left corner of the mask
+    int maskX = mainMonopolyBoard.cols - maskWidth - offsetX;
+    int maskY = mainMonopolyBoard.rows - maskHeight - offsetY;
+
+    // Prevent going out of bounds
+    maskX = std::max(0, maskX);
+    maskY = std::max(0, maskY);
+
+    // Create and apply the mask
+    cv::Rect maskRect(maskX, maskY, maskWidth, maskHeight);
+    maskedBoard(maskRect) = cv::Scalar(0, 0, 0);  // Apply black mask for template matching
+
+    //NOTE: this rectangle code is just for testing. all it does is draw a black rectangle
+    //to determine where the mask is being applied
+    // cv::rectangle(mainMonopolyBoard, maskRect, cv::Scalar(0, 0, 0), cv::FILLED);
+
+    // cv::Mat normalizedBoardLighting = equalizeLightingLABColor(mainMonopolyBoard);
+    cv::Point2f TenDollarCenter = findTenDollarBill(maskedBoard, TenDollar_Image, threshold);
+    cv::Point2f center(TenDollarCenter.x, TenDollarCenter.y);
+    //NOTE: TenDollarBill is COLOR GREEN!!!!
+    cv::circle(mainMonopolyBoard, center, 10, cv::Scalar(0, 255, 0), -1);
+
+    cv::Point centerOfboard = drawBoardCenterCrosshair(mainMonopolyBoard);
+
 
 }
 
-void trackAllMoney(cv::Mat mainMonopolyBoard, cv::Mat TenDollar_Image)
+void findAllMoney(cv::Mat mainMonopolyBoard, cv::Mat TenDollar_Image)
 {
+    findAndDisplayTenDollarBill(mainMonopolyBoard, TenDollar_Image, 0.9);
 
 }
 
 void liveVideoOfMonopolyBoard(cv::Mat main_monopoly_image, cv::Mat camera_matrix, cv::Mat dist_coeffs,
-    cv::Mat PINK_PostIt_Image, cv::Mat BEIGE_PostIt_Image)
+    cv::Mat PINK_PostIt_Image, cv::Mat BEIGE_PostIt_Image, cv::Mat TenDollar_Image)
 {
     //this will be the main loop that will run the game and display the game board
     cv::VideoCapture cap(CAMERA_INDEX);
@@ -717,7 +849,7 @@ void liveVideoOfMonopolyBoard(cv::Mat main_monopoly_image, cv::Mat camera_matrix
             cv::rotate(cropped_board, cropped_board, cv::ROTATE_90_COUNTERCLOCKWISE);
             //here i should call 'findAllGamePieces()' function
             findAllGamePieces(cropped_board, PINK_PostIt_Image, BEIGE_PostIt_Image);
-
+            findAllMoney(cropped_board, TenDollar_Image);
         }
         display_video_frame(cropped_board, Scale, "Live Camera Feed");
 
@@ -737,7 +869,7 @@ int main()
     // takeASinglePicture(CAMERA_INDEX, "../singleBEIGE_PostIt_uncropped.jpg");
     // takeASinglePicture(CAMERA_INDEX, "../singleFrameOfRED_PostIt_OnMonopolyBoard_LEFT_distorted.jpg");
 
-
+    // takeASinglePicture(CAMERA_INDEX, "../singleTenDollarBill_uncropped.jpg");
     // return 0;
     //above is for testing----------------------------------------------------------
 
@@ -785,9 +917,13 @@ int main()
     string BEIGE_PostIt_Path = "../singleBEIGE_PostIt_cropped.jpg";
     cv::Mat BEIGE_PostIt_Image = cv::imread(BEIGE_PostIt_Path, cv::IMREAD_COLOR);
 
+    //Step 6: load in the money templates
+    //load in 10 dollar bill
+    string TenDollarBill_Path = "../singleTenDollarBill_cropped.jpg";
+    cv::Mat TenDollar_Image = cv::imread(TenDollarBill_Path, cv::IMREAD_COLOR);
 
     liveVideoOfMonopolyBoard(cropped_main_monopoly_image, camera_matrix, dist_coeffs,
-        PINK_PostIt_Image, BEIGE_PostIt_Image);
+        PINK_PostIt_Image, BEIGE_PostIt_Image, TenDollar_Image);
     //above is main code for the game-------------------------------------------------------
     return 0;
 }
