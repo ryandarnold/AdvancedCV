@@ -263,14 +263,25 @@ cv::Mat equalizeLightingLABColor(const cv::Mat& inputImage) {
 
 
 // Helper function to rotate the template image
-cv::Mat rotateImage(cv::Mat& image, int angle)
+cv::Mat rotateImage(const cv::Mat& image, int angle)
 {
-    cv::Point2f center(image.cols / 2.0, image.rows / 2.0);
+    cv::Point2f center(image.cols / 2.0f, image.rows / 2.0f);
     cv::Mat rotMat = cv::getRotationMatrix2D(center, angle, 1.0);
+
+    // Compute bounding box size after rotation
+    cv::Rect2f bbox = cv::RotatedRect(center, image.size(), angle).boundingRect2f();
+
+    // Adjust the transformation matrix to fit the whole image
+    rotMat.at<double>(0, 2) += bbox.width / 2.0 - center.x;
+    rotMat.at<double>(1, 2) += bbox.height / 2.0 - center.y;
+
+    // Warp with expanded size
     cv::Mat rotatedImage;
-    cv::warpAffine(image, rotatedImage, rotMat, image.size(), cv::INTER_LINEAR, cv::BORDER_CONSTANT, cv::Scalar(0, 0, 0));
+    cv::warpAffine(image, rotatedImage, rotMat, bbox.size(), cv::INTER_LINEAR, cv::BORDER_CONSTANT, cv::Scalar(0, 0, 0));
+
     return rotatedImage;
 }
+
 
 cv::Point2f findPinkPostIt(cv::Mat mainMonopolyBoard, cv::Mat gamePieceTemplate, double threshold = 0.8)
 {
@@ -291,6 +302,7 @@ cv::Point2f findPinkPostIt(cv::Mat mainMonopolyBoard, cv::Mat gamePieceTemplate,
 
     // 🔹 Resize template to 1/4.5 of original size
     cv::Mat resizedTemplate;
+    //1/4.5 works well
     double scaleFactor = 1.0 / 4.5; // had to resize because the template was WAY too big compared to actual game piece
     cv::resize(gamePieceTemplate, resizedTemplate, cv::Size(), scaleFactor, scaleFactor, cv::INTER_LINEAR);
     // std::cout << "Resized Template Size: " << resizedTemplate.cols << " x " << resizedTemplate.rows << std::endl;
@@ -302,6 +314,9 @@ cv::Point2f findPinkPostIt(cv::Mat mainMonopolyBoard, cv::Mat gamePieceTemplate,
 
     // 🔹 Try all rotations (0°, 90°, 180°, 270°)
     std::vector<int> angles = {0, 90, 180, 270};
+    // cv::Mat rotatedTemplate = rotateImage(resizedTemplate, 90);
+    // display_video_frame(rotatedTemplate, 1, "Rotated Template");
+    // display_video_frame(gamePieceTemplate, 1, "Original Template Template");
     for (int angle : angles)
     {
         cv::Mat rotatedTemplate = rotateImage(resizedTemplate, angle);
@@ -335,26 +350,81 @@ cv::Point2f findPinkPostIt(cv::Mat mainMonopolyBoard, cv::Mat gamePieceTemplate,
         cv::Point2f center(bestMatchLoc.x + bestMatchSize.width / 2.0,
                            bestMatchLoc.y + bestMatchSize.height / 2.0);
 
-        // cout << "Game piece detected at: " << bestMatchLoc << " | Center: " << center << " | bestMatchScore: " << bestMatchScore << std::endl;
+        // 🔹 Draw the Correctly Rotated Bounding Box
+        cv::RotatedRect rotatedRect(center, bestMatchSize, bestRotationAngle);
+        cv::Point2f rectPoints[4];
+        rotatedRect.points(rectPoints);  // Get the 4 corner points
 
-        // 🔹 Draw a small circle at the center of the detected game piece
-        // cv::circle(mainMonopolyBoard, center, 5, cv::Scalar(0, 0, 255), -1); // Red dot
-
-        // 🔹 Draw a standard (not rotated) bounding box for now
-        // cv::rectangle(mainMonopolyBoard, bestMatchLoc,
-        //               cv::Point(bestMatchLoc.x + bestMatchSize.width, bestMatchLoc.y + bestMatchSize.height),
-        //               cv::Scalar(0, 255, 0), 3);
-        // display_image(mainMonopolyBoard, 1.0, "Detected Game Piece");
+        for (int i = 0; i < 4; i++)
+        {
+            cv::line(mainMonopolyBoard, rectPoints[i], rectPoints[(i + 1) % 4], cv::Scalar(0, 255, 255), 2);
+        }
 
         return center;
     }
 }
 
+void findAndDisplayPINKPostIt(cv::Mat mainMonopolyBoard, cv::Mat PINK_PostIt_Image, double threshold)
+{
+    //below is original code but doesn't work with "chance" cards section
+    // cv::Mat lightingFixedBoard = equalizeBoardLighting(mainMonopolyBoard);
+    // cv::Mat normalizedBoardLighting = equalizeLightingLABColor(mainMonopolyBoard);
+    // display_video_frame(normalizedBoardLighting, 1, "Normalized Board Lightinghhh");
+    // // cv::Point2f pinkPostItCenter = findPinkPostIt(mainMonopolyBoard, PINK_PostIt_Image, threshold);
+    // cv::Point2f pinkPostItCenter = findPinkPostIt(normalizedBoardLighting, PINK_PostIt_Image, threshold);
+    // cv::Point2f center(pinkPostItCenter.x, pinkPostItCenter.y);
+    // cv::circle(mainMonopolyBoard, center, 10, cv::Scalar(0, 0, 255), -1);
+    //above is original code but doesn't work with "chance" cards section
+
+
+    //below is new code for testing without chance card section
+    // Clone the board for masking during template matching
+    cv::Mat maskedBoard = mainMonopolyBoard.clone();
+    // cv::Mat maskedBoard = mainMonopolyBoard;
+
+    // Offsets to shift the mask position
+    int offsetX = 125; // move left from right edge
+    int offsetY = 120; // move up from bottom edge
+
+    int maskWidth = 125;
+    int maskHeight = 125;
+
+    // Compute top-left corner of the mask
+    int maskX = mainMonopolyBoard.cols - maskWidth - offsetX;
+    int maskY = mainMonopolyBoard.rows - maskHeight - offsetY;
+
+    // Prevent going out of bounds
+    maskX = std::max(0, maskX);
+    maskY = std::max(0, maskY);
+
+    // Create and apply the mask
+    cv::Rect maskRect(maskX, maskY, maskWidth, maskHeight);
+    maskedBoard(maskRect) = cv::Scalar(0, 0, 0);  // Apply black mask for template matching
+
+    //NOTE: this rectangle code is just for testing. all it does is draw a black rectangle
+    //to determine where the mask is being applied
+    // cv::rectangle(mainMonopolyBoard, maskRect, cv::Scalar(0, 0, 0), cv::FILLED);
+
+
+    // Run template matching on the masked image
+    cv::Point2f pinkPostItCenter = findPinkPostIt(maskedBoard, PINK_PostIt_Image, threshold);
+
+    // If a match is found, draw a red dot
+    if (pinkPostItCenter.x != -1 && pinkPostItCenter.y != -1)
+    {
+        //NOTE: Pink Post it is COLOR RED!!!!
+        cv::circle(mainMonopolyBoard, pinkPostItCenter, 10, cv::Scalar(0, 0, 255), -1);
+        drawLabelAbovePoint(mainMonopolyBoard, "Player 1", pinkPostItCenter, 0.5, 1, cv::Scalar(0, 0, 255));
+    }
+    //above is new code for testing without chance card section
+}
+
+
 cv::Point2f findBeigePostIt(cv::Mat& mainMonopolyBoard, cv::Mat BEIGE_PostIt_Image, double threshold = 0.8)
 {
-    // Resize template to 1/6th of its original size
+    // Resize template
     cv::Mat resizedTemplate;
-    double scaleFactor = 1.0 / 7.5;
+    double scaleFactor = 1.0 / 6;
     cv::resize(BEIGE_PostIt_Image, resizedTemplate, cv::Size(), scaleFactor, scaleFactor, cv::INTER_LINEAR);
 
     double bestMatchScore = 0;
@@ -401,7 +471,7 @@ cv::Point2f findBeigePostIt(cv::Mat& mainMonopolyBoard, cv::Mat BEIGE_PostIt_Ima
 
         // std::cout << "Best match found at: " << bestMatchLoc
         //           << " | Center: " << center
-        //           << " | Rotation: " << bestRotationAngle << "°"
+        //           << " | Rotation: " << bestRotationAngle << ""
         //           << " | Score: " << bestMatchScore << std::endl;
 
         // 🔹 Draw the Correctly Rotated Bounding Box
@@ -410,79 +480,64 @@ cv::Point2f findBeigePostIt(cv::Mat& mainMonopolyBoard, cv::Mat BEIGE_PostIt_Ima
         rotatedRect.points(rectPoints);
 
         for (int i = 0; i < 4; i++)
-            cv::line(mainMonopolyBoard, rectPoints[i], rectPoints[(i + 1) % 4], cv::Scalar(0, 255, 0), 2);
-
+        {
+            // cout <<"got to point " << rectPoints[i] << endl;
+            cv::line(mainMonopolyBoard, rectPoints[i], rectPoints[(i + 1) % 4], cv::Scalar(255, 0, 0), 2);
+            // cv::Rect debugRect(10, 10, 100, 60);  // x=10, y=10, width=100, height=60
+            // cv::rectangle(mainMonopolyBoard, debugRect, cv::Scalar(57, 150, 255), 4);
+            // display_video_frame(mainMonopolyBoard, 1, "Debug Rectangle");
+        }
         return center;
     }
 }
 
-
-void findAndDisplayPINKPostIt(cv::Mat mainMonopolyBoard, cv::Mat PINK_PostIt_Image, double threshold)
+cv::Mat adjustImageBrightness(const cv::Mat& inputImage, double percentage)
 {
-    //below is original code but doesn't work with "chance" cards section
-    // cv::Mat lightingFixedBoard = equalizeBoardLighting(mainMonopolyBoard);
-    // cv::Mat normalizedBoardLighting = equalizeLightingLABColor(mainMonopolyBoard);
-    // display_video_frame(normalizedBoardLighting, 1, "Normalized Board Lightinghhh");
-    // // cv::Point2f pinkPostItCenter = findPinkPostIt(mainMonopolyBoard, PINK_PostIt_Image, threshold);
-    // cv::Point2f pinkPostItCenter = findPinkPostIt(normalizedBoardLighting, PINK_PostIt_Image, threshold);
-    // cv::Point2f center(pinkPostItCenter.x, pinkPostItCenter.y);
-    // cv::circle(mainMonopolyBoard, center, 10, cv::Scalar(0, 0, 255), -1);
-    //above is original code but doesn't work with "chance" cards section
+    // Convert to HSV color space
+    cv::Mat hsvImage;
+    cv::cvtColor(inputImage, hsvImage, cv::COLOR_BGR2HSV);
 
+    // Split into H, S, V channels
+    std::vector<cv::Mat> hsvChannels;
+    cv::split(hsvImage, hsvChannels);
 
-    //below is new code for testing without chance card section
-    // Clone the board for masking during template matching
-    cv::Mat maskedBoard = mainMonopolyBoard.clone();
+    // Calculate brightness adjustment factor
+    double factor = 1.0 + (percentage / 100.0);
 
-    // Offsets to shift the mask position
-    int offsetX = 125; // move left from right edge
-    int offsetY = 120; // move up from bottom edge
+    // Ensure factor stays positive to avoid inversion
+    factor = std::max(0.0, factor);  // if percentage = -100 → factor = 0
 
-    int maskWidth = 125;
-    int maskHeight = 125;
+    // Apply brightness scaling to V channel
+    hsvChannels[2].convertTo(hsvChannels[2], -1, factor, 0);
 
-    // Compute top-left corner of the mask
-    int maskX = mainMonopolyBoard.cols - maskWidth - offsetX;
-    int maskY = mainMonopolyBoard.rows - maskHeight - offsetY;
+    // Clip values to [0,255]
+    cv::threshold(hsvChannels[2], hsvChannels[2], 255, 255, cv::THRESH_TRUNC);
 
-    // Prevent going out of bounds
-    maskX = std::max(0, maskX);
-    maskY = std::max(0, maskY);
+    // Merge and convert back to BGR
+    cv::Mat brightenedHSV, outputImage;
+    cv::merge(hsvChannels, brightenedHSV);
+    cv::cvtColor(brightenedHSV, outputImage, cv::COLOR_HSV2BGR);
 
-    // Create and apply the mask
-    cv::Rect maskRect(maskX, maskY, maskWidth, maskHeight);
-    maskedBoard(maskRect) = cv::Scalar(0, 0, 0);  // Apply black mask for template matching
-
-    //NOTE: this rectangle code is just for testing. all it does is draw a black rectangle
-    //to determine where the mask is being applied
-    // cv::rectangle(mainMonopolyBoard, maskRect, cv::Scalar(0, 0, 0), cv::FILLED);
-
-
-    // Run template matching on the masked image
-    cv::Point2f pinkPostItCenter = findPinkPostIt(maskedBoard, PINK_PostIt_Image, threshold);
-
-    // If a match is found, draw a red dot
-    if (pinkPostItCenter.x != -1 && pinkPostItCenter.y != -1)
-    {
-        //NOTE: Pink Post it is COLOR RED!!!!
-        cv::circle(mainMonopolyBoard, pinkPostItCenter, 10, cv::Scalar(0, 0, 255), -1);
-        drawLabelAbovePoint(mainMonopolyBoard, "Player 1", pinkPostItCenter, 0.7, 2, cv::Scalar(0, 0, 255));
-    }
-    //above is new code for testing without chance card section
+    return outputImage;
 }
+
+
 
 void findAndDisplayBEIGEPostIt(cv::Mat mainMonopolyBoard, cv::Mat BEIGE_PostIt_Image, double threshold)
 {
-    //below is original code but doesn't work with highly refelective surface
+    // display_video_frame(BEIGE_PostIt_Image, 1, "Old Beige Post it");
+    // cv::Mat newBeigePostItImage = adjustImageBrightness(BEIGE_PostIt_Image, 40);
+    // display_video_frame(newBeigePostItImage, 1, "New beige post it ");
+    //below is original code but doesn't work with highly reflective surface
     // cv::Mat lightingFixedBoard = equalizeBoardLighting(mainMonopolyBoard);
     cv::Mat normalizedBoardLighting = equalizeLightingLABColor(mainMonopolyBoard);
-    // display_video_frame(lightingFixedBoard, 1, "Lighting Fixed Board");
+    // display_video_frame(normalizedBoardLighting, 1, "Lighting Fixed Board");
     // cv::Point2f beigePostItCenter = findBeigePostIt(mainMonopolyBoard, BEIGE_PostIt_Image, threshold);
-    cv::Point2f beigePostItCenter = findBeigePostIt(normalizedBoardLighting, BEIGE_PostIt_Image, threshold);
+    cv::Point2f beigePostItCenter = findBeigePostIt(normalizedBoardLighting , BEIGE_PostIt_Image, threshold);
     cv::Point2f center(beigePostItCenter.x, beigePostItCenter.y);
     //NOTE: Beige Post it is COLOR MAGENTA!!!!
     cv::circle(mainMonopolyBoard, center, 10, cv::Scalar(255, 0, 255), -1);
-    drawLabelAbovePoint(mainMonopolyBoard, "Player 2", beigePostItCenter, 0.7, 2, cv::Scalar(255, 0, 255));
+    drawLabelAbovePoint(mainMonopolyBoard, "Player 2", beigePostItCenter, 0.5, 1, cv::Scalar(255, 0, 255));
     //above is original code but doesn't work with highly reflective surface
 }
 
@@ -492,7 +547,7 @@ void findAllGamePieces(cv::Mat current_monopoly_board_image, cv::Mat PINK_PostIt
     //PINK_PostIt_Image is the game piece that we're trying to detect on the game board (the pink post it)
 
     findAndDisplayPINKPostIt(current_monopoly_board_image, PINK_PostIt_Image, 0.8);
-    findAndDisplayBEIGEPostIt(current_monopoly_board_image, BEIGE_PostIt_Image, 0.8);
+    findAndDisplayBEIGEPostIt(current_monopoly_board_image, BEIGE_PostIt_Image, 0.9);
 
 }
 
@@ -734,10 +789,10 @@ cv::Point drawVerticalCenterLine(cv::Mat& boardImage)
     cv::circle(boardImage, center, 5, cv::Scalar(0, 0, 0), -1);  // Black dot
 
     // Step 3: Draw vertical line through center
-    cv::line(boardImage,
-             cv::Point(centerX, 0),                          // top of image
-             cv::Point(centerX, boardImage.rows),            // bottom of image
-             cv::Scalar(0, 0, 0), 2);                         // black, 2px thick
+    // cv::line(boardImage,
+    //          cv::Point(centerX, 0),                          // top of image
+    //          cv::Point(centerX, boardImage.rows),            // bottom of image
+    //          cv::Scalar(0, 0, 0), 2);                         // black, 2px thick
 
     return center;
 }
@@ -846,8 +901,6 @@ void findAndDisplayTenDollarBill(cv::Mat mainMonopolyBoard, cv::Mat TenDollar_Im
     cv::circle(mainMonopolyBoard, center, 10, cv::Scalar(0, 255, 0), -1);
     drawLabelAbovePoint(mainMonopolyBoard, "$10", center, 0.7, 2, cv::Scalar(255, 0, 255));  // magenta
 
-
-
 }
 
 void findAllMoney(cv::Mat mainMonopolyBoard, cv::Mat TenDollar_Image)
@@ -877,6 +930,7 @@ void liveVideoOfMonopolyBoard(cv::Mat main_monopoly_image, cv::Mat camera_matrix
         current_frame_count++;
         cap >> currentFrame; // grab new video frame
 
+        //undistorts from wide-angle to normal/flat camera
         cv::undistort(currentFrame, undistorted_current_frame, camera_matrix, dist_coeffs);
         if (current_frame_count % 3 == 0) //only do SIFT every 3 frames because it is computationally expensive
         {
@@ -888,6 +942,7 @@ void liveVideoOfMonopolyBoard(cv::Mat main_monopoly_image, cv::Mat camera_matrix
             findAllGamePieces(cropped_board, PINK_PostIt_Image, BEIGE_PostIt_Image);
             findAllMoney(cropped_board, TenDollar_Image);
             cv::Point centerOfboard = drawVerticalCenterLine(cropped_board);
+            // display_video_frame(cropped_board, Scale, "this board may or may not have line on it");
         }
         display_video_frame(cropped_board, Scale, "Live Camera Feed");
 
