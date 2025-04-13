@@ -27,6 +27,18 @@ void display_video_frame(cv::Mat videoFrameToDisplay, double Scale, string windo
     cv::imshow(window_name, resized_frame);
 }
 
+void drawLabelAbovePoint(cv::Mat& image, const std::string& label, cv::Point2f point,
+                         double fontScale = 0.5, int thickness = 1, cv::Scalar color = cv::Scalar(0, 255, 0))
+{
+    int fontFace = cv::FONT_HERSHEY_SIMPLEX;
+    int baseline = 0;
+    cv::Size textSize = cv::getTextSize(label, fontFace, fontScale, thickness, &baseline);
+
+    // Position text above the point
+    cv::Point textOrg(point.x - textSize.width / 2, point.y - 15);
+    cv::putText(image, label, textOrg, fontFace, fontScale, color, thickness);
+}
+
 cv::Mat SIFT_forGameBoardAlignment(cv::Mat mainBoardTemplateImage, cv::Mat currentFrameImage)
 {
     //this function will try to warp the current frame image to match the main board template image
@@ -405,7 +417,6 @@ cv::Point2f findBeigePostIt(cv::Mat& mainMonopolyBoard, cv::Mat BEIGE_PostIt_Ima
 }
 
 
-
 void findAndDisplayPINKPostIt(cv::Mat mainMonopolyBoard, cv::Mat PINK_PostIt_Image, double threshold)
 {
     //below is original code but doesn't work with "chance" cards section
@@ -452,8 +463,11 @@ void findAndDisplayPINKPostIt(cv::Mat mainMonopolyBoard, cv::Mat PINK_PostIt_Ima
 
     // If a match is found, draw a red dot
     if (pinkPostItCenter.x != -1 && pinkPostItCenter.y != -1)
+    {
         //NOTE: Pink Post it is COLOR RED!!!!
         cv::circle(mainMonopolyBoard, pinkPostItCenter, 10, cv::Scalar(0, 0, 255), -1);
+        drawLabelAbovePoint(mainMonopolyBoard, "Player 1", pinkPostItCenter, 0.7, 2, cv::Scalar(0, 0, 255));
+    }
     //above is new code for testing without chance card section
 }
 
@@ -468,6 +482,7 @@ void findAndDisplayBEIGEPostIt(cv::Mat mainMonopolyBoard, cv::Mat BEIGE_PostIt_I
     cv::Point2f center(beigePostItCenter.x, beigePostItCenter.y);
     //NOTE: Beige Post it is COLOR MAGENTA!!!!
     cv::circle(mainMonopolyBoard, center, 10, cv::Scalar(255, 0, 255), -1);
+    drawLabelAbovePoint(mainMonopolyBoard, "Player 2", beigePostItCenter, 0.7, 2, cv::Scalar(255, 0, 255));
     //above is original code but doesn't work with highly reflective surface
 }
 
@@ -682,6 +697,9 @@ void detectGamePieces(cv::Mat current_monopoly_board_image, cv::Mat PINK_PostIt_
 
 cv::Point drawBoardCenterCrosshair(cv::Mat& boardImage)
 {
+    /*This function draws a crosshair at the center of the board image
+     *but isn't that useful, since most players sit at the four sides of the board, not at the corners
+     **/
     // Step 1: Compute center of the image
     int centerX = boardImage.cols / 2;
     int centerY = boardImage.rows / 2;
@@ -705,6 +723,25 @@ cv::Point drawBoardCenterCrosshair(cv::Mat& boardImage)
     // Return the center
     return center;
 }
+
+cv::Point drawVerticalCenterLine(cv::Mat& boardImage)
+{
+    // Step 1: Compute horizontal center (X only)
+    int centerX = boardImage.cols / 2;
+    cv::Point center(centerX, boardImage.rows / 2);
+
+    // Step 2: (Optional) Draw black dot at center
+    cv::circle(boardImage, center, 5, cv::Scalar(0, 0, 0), -1);  // Black dot
+
+    // Step 3: Draw vertical line through center
+    cv::line(boardImage,
+             cv::Point(centerX, 0),                          // top of image
+             cv::Point(centerX, boardImage.rows),            // bottom of image
+             cv::Scalar(0, 0, 0), 2);                         // black, 2px thick
+
+    return center;
+}
+
 
 
 cv::Point2f findTenDollarBill(cv::Mat mainMonopolyBoard, cv::Mat TenDollar_Image, double threshold)
@@ -807,8 +844,8 @@ void findAndDisplayTenDollarBill(cv::Mat mainMonopolyBoard, cv::Mat TenDollar_Im
     cv::Point2f center(TenDollarCenter.x, TenDollarCenter.y);
     //NOTE: TenDollarBill is COLOR GREEN!!!!
     cv::circle(mainMonopolyBoard, center, 10, cv::Scalar(0, 255, 0), -1);
+    drawLabelAbovePoint(mainMonopolyBoard, "$10", center, 0.7, 2, cv::Scalar(255, 0, 255));  // magenta
 
-    cv::Point centerOfboard = drawBoardCenterCrosshair(mainMonopolyBoard);
 
 
 }
@@ -850,6 +887,7 @@ void liveVideoOfMonopolyBoard(cv::Mat main_monopoly_image, cv::Mat camera_matrix
             //here i should call 'findAllGamePieces()' function
             findAllGamePieces(cropped_board, PINK_PostIt_Image, BEIGE_PostIt_Image);
             findAllMoney(cropped_board, TenDollar_Image);
+            cv::Point centerOfboard = drawVerticalCenterLine(cropped_board);
         }
         display_video_frame(cropped_board, Scale, "Live Camera Feed");
 
