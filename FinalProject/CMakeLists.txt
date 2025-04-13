@@ -8,5 +8,6 @@ find_package(OpenCV REQUIRED)
 include_directories(${OpenCV_INCLUDE_DIRS})
 
 add_executable(FinalProject main.cpp
-        extraFunctions.cpp)
+        extraFunctions.cpp
+        Player.cpp)
 target_link_libraries(FinalProject ${OpenCV_LIBS})

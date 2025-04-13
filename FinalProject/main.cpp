@@ -789,10 +789,10 @@ cv::Point drawVerticalCenterLine(cv::Mat& boardImage)
     cv::circle(boardImage, center, 5, cv::Scalar(0, 0, 0), -1);  // Black dot
 
     // Step 3: Draw vertical line through center
-    // cv::line(boardImage,
-    //          cv::Point(centerX, 0),                          // top of image
-    //          cv::Point(centerX, boardImage.rows),            // bottom of image
-    //          cv::Scalar(0, 0, 0), 2);                         // black, 2px thick
+    cv::line(boardImage,
+             cv::Point(centerX, 0),                          // top of image
+             cv::Point(centerX, boardImage.rows),            // bottom of image
+             cv::Scalar(0, 0, 0), 2);                         // black, 2px thick
 
     return center;
 }
@@ -942,7 +942,7 @@ void liveVideoOfMonopolyBoard(cv::Mat main_monopoly_image, cv::Mat camera_matrix
             findAllGamePieces(cropped_board, PINK_PostIt_Image, BEIGE_PostIt_Image);
             findAllMoney(cropped_board, TenDollar_Image);
             cv::Point centerOfboard = drawVerticalCenterLine(cropped_board);
-            // display_video_frame(cropped_board, Scale, "this board may or may not have line on it");
+
         }
         display_video_frame(cropped_board, Scale, "Live Camera Feed");
 
