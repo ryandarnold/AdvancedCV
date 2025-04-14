@@ -3,12 +3,18 @@
 #include <chrono>
 #include "extraFunctions.h"
 #include <tuple>
+#include "Player.h" //"" for my own header files, <> for system header files
 /*I have OpenCV version 4.5.5-dev
 */
 
 using namespace std;
 
 int CAMERA_INDEX = 0;
+
+struct LabeledPoint {
+    cv::Point point;
+    std::string label;
+};
 
 void display_image(cv::Mat original_image, double Scale, string window_name)
 {
@@ -865,7 +871,7 @@ cv::Point2f findTenDollarBill(cv::Mat mainMonopolyBoard, cv::Mat TenDollar_Image
     }
 }
 
-void findAndDisplayTenDollarBill(cv::Mat mainMonopolyBoard, cv::Mat TenDollar_Image, double threshold)
+cv::Point findAndDisplayTenDollarBill(cv::Mat mainMonopolyBoard, cv::Mat TenDollar_Image, double threshold)
 {
     cv::Mat normalizedBoardLighting = equalizeLightingLABColor(mainMonopolyBoard);
     // Clone the board for masking during template matching
@@ -900,17 +906,84 @@ void findAndDisplayTenDollarBill(cv::Mat mainMonopolyBoard, cv::Mat TenDollar_Im
     //NOTE: TenDollarBill is COLOR GREEN!!!!
     cv::circle(mainMonopolyBoard, center, 10, cv::Scalar(0, 255, 0), -1);
     drawLabelAbovePoint(mainMonopolyBoard, "$10", center, 0.7, 2, cv::Scalar(255, 0, 255));  // magenta
-
+    return center;
 }
 
 void findAllMoney(cv::Mat mainMonopolyBoard, cv::Mat TenDollar_Image)
 {
-    findAndDisplayTenDollarBill(mainMonopolyBoard, TenDollar_Image, 0.9);
+    // cv::Point current_center = findAndDisplayTenDollarBill(mainMonopolyBoard, TenDollar_Image, 0.9);
+
+}
+
+void determineIfMoneyHasBeenExchanged(cv::Mat mainMonopolyBoard, cv::Mat TenDollar_Image, cv::Point centerOfBoard,
+    Player& player1, Player& player2)
+{
+    static vector<LabeledPoint> trackedPoints;
+    static cv::Point previousAverageCenter;
+    static int counter = 0;
+
+    //always track the money
+    cv::Point tenDollar_Center = findAndDisplayTenDollarBill(mainMonopolyBoard, TenDollar_Image, 0.9);
+    //greater than 656 cols (ideal is 658)
+    //greater than 658 (ideal is 660)
+    //because i found that the best image was 658x660
+    if (mainMonopolyBoard.cols > 656 && mainMonopolyBoard.rows > 658) //only track if you have a good image
+    {
+        //TODO: Ryan, you need to probably find the center point of the image only in here
+        // so your algorithm doesn't get confused with the wrong center of the board
+        //cout << "good enough image to start tracking" << endl;
+
+        //once the average location of the money, after 5 frames, is to the right of the center,
+        //then we know the money has been exchanged
+        if (counter < 5)
+        {
+            //only track up to 5 points at once
+            trackedPoints.push_back({tenDollar_Center, "TEN_DOLLARS"});
+            counter++;
+        }
+        else if (counter % 5 == 0) //update only every 5 frames
+        {
+            //delete the last point
+            trackedPoints.pop_back();
+            //add the new point
+            trackedPoints.push_back({tenDollar_Center, "TEN_DOLLARS"});
+            //calculate the average of the last 5 points
+            int averageX = 0;
+            int averageY = 0;
+            for (int i = 0; i < trackedPoints.size(); i++)
+            {
+                averageX += trackedPoints[i].point.x;
+                averageY += trackedPoints[i].point.y;
+            }
+            averageX = averageX / trackedPoints.size();
+            averageY = averageY / trackedPoints.size();
+
+            cv::Point averageCenter(averageX, averageY);
+            //TODO: change below 'if statement' if i add more players
+            if (averageCenter.x > centerOfBoard.x && (previousAverageCenter.x < centerOfBoard.x))
+            { //money went from left (alice) to right (bob)
+                previousAverageCenter = averageCenter; //update so
+                player1.deductMoney(10);
+                player2.addMoney(10);
+                cout << "Alice lost $10, and Bob gained $10!" << endl;
+                cout << "player 1 money" << player1.getMoney() << endl;
+                cout << "player 2 money" << player2.getMoney() << endl;
+            }
+            else if (averageCenter.x < centerOfBoard.x && (previousAverageCenter.x > centerOfBoard.x))
+            { //money went from right (bob) to left (alice)
+                //TODO: do this else if statement (note: this only works with two players so far)
+            }
+
+        }
+
+        counter++;
+
+    }
 
 }
 
 void liveVideoOfMonopolyBoard(cv::Mat main_monopoly_image, cv::Mat camera_matrix, cv::Mat dist_coeffs,
-    cv::Mat PINK_PostIt_Image, cv::Mat BEIGE_PostIt_Image, cv::Mat TenDollar_Image)
+    cv::Mat PINK_PostIt_Image, cv::Mat BEIGE_PostIt_Image, cv::Mat TenDollar_Image, Player& player1, Player& player2)
 {
     //this will be the main loop that will run the game and display the game board
     cv::VideoCapture cap(CAMERA_INDEX);
@@ -934,14 +1007,22 @@ void liveVideoOfMonopolyBoard(cv::Mat main_monopoly_image, cv::Mat camera_matrix
         cv::undistort(currentFrame, undistorted_current_frame, camera_matrix, dist_coeffs);
         if (current_frame_count % 3 == 0) //only do SIFT every 3 frames because it is computationally expensive
         {
+
             warped_current_video_frame = SIFT_forGameBoardAlignment(main_monopoly_image, undistorted_current_frame);
             cropped_board = crop_out_background(warped_current_video_frame);
             //need to rotate because SIFT changes the rotation
             cv::rotate(cropped_board, cropped_board, cv::ROTATE_90_COUNTERCLOCKWISE);
+            // Display image size
+            std::string sizeText = "Size: " + std::to_string(cropped_board.cols) + "x" + std::to_string(cropped_board.rows);
+            cv::putText(cropped_board, sizeText, cv::Point(10, 50), cv::FONT_HERSHEY_SIMPLEX,
+                        1.0, cv::Scalar(0, 255, 255), 1);
             //here i should call 'findAllGamePieces()' function
             findAllGamePieces(cropped_board, PINK_PostIt_Image, BEIGE_PostIt_Image);
-            findAllMoney(cropped_board, TenDollar_Image);
+            // findAllMoney(cropped_board, TenDollar_Image);
             cv::Point centerOfboard = drawVerticalCenterLine(cropped_board);
+            determineIfMoneyHasBeenExchanged(cropped_board, TenDollar_Image, centerOfboard,
+                player1, player2);
+
 
         }
         display_video_frame(cropped_board, Scale, "Live Camera Feed");
@@ -956,7 +1037,6 @@ void liveVideoOfMonopolyBoard(cv::Mat main_monopoly_image, cv::Mat camera_matrix
 int main()
 {
     //below is for testing----------------------------------------------------------
-
 
     // detectGamePiece();
     // takeASinglePicture(CAMERA_INDEX, "../singleBEIGE_PostIt_uncropped.jpg");
@@ -1015,8 +1095,13 @@ int main()
     string TenDollarBill_Path = "../singleTenDollarBill_cropped.jpg";
     cv::Mat TenDollar_Image = cv::imread(TenDollarBill_Path, cv::IMREAD_COLOR);
 
+    Player player1("Alice", 10);  // name = "Alice", starting money = 10
+    Player player2("Bob", 0);    // name = "Bob", starting money = 0
+
     liveVideoOfMonopolyBoard(cropped_main_monopoly_image, camera_matrix, dist_coeffs,
-        PINK_PostIt_Image, BEIGE_PostIt_Image, TenDollar_Image);
+        PINK_PostIt_Image, BEIGE_PostIt_Image, TenDollar_Image, player1, player2);
+    cout <<"Player 1: " << player1.getName() << ", Money: " << player1.getMoney() << endl;
+    cout <<"Player 2: " << player2.getName() << ", Money: " << player2.getMoney() << endl;
     //above is main code for the game-------------------------------------------------------
     return 0;
 }
