@@ -27,7 +27,7 @@ public:
     void addMoney(int amount);
     void deductMoney(int amount);
     void setMoney(int newAmount);
-    void setCurrentPosition(const string& newPosition) { currentPosition = newPosition; }
+    void setCurrentPosition(const string& newPosition);
 };
 
 #endif //PLAYER_H

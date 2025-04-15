@@ -2,8 +2,7 @@
 #include "Player.h"
 
 // Constructor
-Player::Player(const std::string& playerName, int startingMoney)
-    : name(playerName), money(startingMoney) {}
+Player::Player(const std::string& playerName, int startingMoney): name(playerName), money(startingMoney) {}
 
 //-----------------------------------------------------------------------
 // Getters
@@ -35,4 +34,9 @@ void Player::deductMoney(int amount)
 void Player::setMoney(int newAmount)
 {
     money = newAmount;
+}
+
+void Player::setCurrentPosition(const string& newPosition)
+{
+    currentPosition = newPosition;
 }

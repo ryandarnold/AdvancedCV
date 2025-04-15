@@ -10,6 +10,8 @@
 using namespace std;
 
 int CAMERA_INDEX = 0;
+int idealColumnAmount = 656; //more than this!
+int idealRowAmount = 658; //more than this!
 
 struct LabeledPoint {
     cv::Point point;
@@ -989,7 +991,28 @@ void determineIfMoneyHasBeenExchanged(cv::Mat mainMonopolyBoard, cv::Mat TenDoll
 void findWhatPropertyPlayersAreOn(cv::Mat mainMonopolyBoard, vector<cv::Point2f> playerPositions,
     Player& player1, Player& player2)
 {
-    //now to find what properties each player is on 
+    //now to find what properties each player is on
+    cv::Point2f playerONE_position = playerPositions[0];
+    cv::Point2f playerTWO_position = playerPositions[1];
+    cout << "Player 1 position: " << playerONE_position << endl;
+    cout << "Player 2 position: " << playerTWO_position << endl;
+
+    if (mainMonopolyBoard.cols > idealColumnAmount && mainMonopolyBoard.rows > idealRowAmount)
+    {
+        //draw a white small vertical line at x = 160, y = 513
+        //NOTE: Vermont Avenue x limits: 138 to 191; y limits: (550 to mainMonopolyBoard.rows)
+
+        // cv::line(mainMonopolyBoard, cv::Point(191, 550), cv::Point(191, mainMonopolyBoard.rows), cv::Scalar(255, 255, 255), 2);
+        // cv::Rect whiteRect(138, 550, 191 - 138, mainMonopolyBoard.rows - 550);
+        // cv::rectangle(mainMonopolyBoard, whiteRect, cv::Scalar(255, 255, 255), cv::FILLED);
+        if (playerONE_position.x > 138 && playerONE_position.x < 191 && playerONE_position.y > 550)
+        {
+            cout << "Player 1 is on Vermont Avenue!" << endl;
+            player1.setCurrentPosition("Vermont Avenue");
+        }
+        
+
+    }
 }
 
 void liveVideoOfMonopolyBoard(cv::Mat main_monopoly_image, cv::Mat camera_matrix, cv::Mat dist_coeffs,
