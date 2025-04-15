@@ -992,8 +992,8 @@ void findWhatPropertyPlayersAreOn(cv::Mat mainMonopolyBoard, vector<cv::Point2f>
     Player& player1, Player& player2)
 {
     //now to find what properties each player is on
-    cv::Point2f playerONE_position = playerPositions[0];
-    cv::Point2f playerTWO_position = playerPositions[1];
+    cv::Point playerONE_position = playerPositions[0];
+    cv::Point playerTWO_position = playerPositions[1];
     // cout << "Player 1 position: " << playerONE_position << endl;
     // cout << "Player 2 position: " << playerTWO_position << endl;
 
@@ -1002,13 +1002,37 @@ void findWhatPropertyPlayersAreOn(cv::Mat mainMonopolyBoard, vector<cv::Point2f>
         //draw a white small vertical line at x = 160, y = 513
         //NOTE: Vermont Avenue x limits: 138 to 191; y limits: (550 to mainMonopolyBoard.rows)
 
+        struct BoardSectionBottom
+        {
+            string name;
+            int leftmost_x;
+            int rightmost_x;
+            int topmost_y;
+        };
 
-        // struct VermontAvenuePoints
-        // {
-        //     int leftmost_x = 138; //greater than this
-        //     int rightmost_x = 191; //less than this
-        //     int topmost_y = 550; //greater than this
-        // };
+        static const vector<BoardSectionBottom> boardSections = {
+            {"Vermont Avenue", 138, 191, 550},
+            {"Bottom Chance", 192, 245, 550}
+        };
+
+        static const vector<string> bottomPropertyNames = {"Mediterranean Avenue", "Community Chest", "Baltic Avenue",
+           "Income Tax", "Reading Railroad", "Oriental Avenue", "Chance", "Vermont Avenue", "Connecticut Avenue",};
+        static const vector<string> leftPropertyNames = {"St. Charles Place", "Electric Company", "States Avenue",
+           "Virginia Avenue", "Pennsylvania Avenue", "St. James Place", "Community Chest", "Tennessee Avenue", "New York Avenue"};
+        static const vector<string> topPropertyNames = {"Kentucky Avenue", "Chance", "Indiana Avenue",
+           "Illinois Avenue", "B&O Railroad", "Atlantic Avenue", "Ventnor Avenue", "Water Works", "Marvin Gardens"};
+        static const vector<string> rightPropertyNames = {"Pacific Avenue", "North Carolina Avenue", "Community Chest",
+           "Pennsylvania Avenue", "Short Line Railroad", "Chance", "Park Place", "Luxury Tax", "Boardwalk"};
+        static const vector<string> cornerPropertyNames = {"GO", "Jail", "Free Parking", "Go To Jail"};
+        //below are for the bottom properties
+        for (int i = 0; i < /*bottomPropertyNames.size()*/ 2; i++)
+        {
+            if (playerONE_position.x > boardSections[i].leftmost_x)
+            {
+
+            }
+        }
+
         if (playerONE_position.x > 138 && playerONE_position.x < 191 && playerONE_position.y > 550)
         {
             if (player1.getCurrentPosition() != "Vermont Avenue")
@@ -1025,10 +1049,17 @@ void findWhatPropertyPlayersAreOn(cv::Mat mainMonopolyBoard, vector<cv::Point2f>
                 player2.setCurrentPosition("Vermont Avenue");
             }
         }
-        //now to check if
-        // Draw a red line from (100, 50) to (300, 200)
-        cv::line(mainMonopolyBoard, cv::Point(100, 50), cv::Point(300, 200), cv::Scalar(0, 0, 255), 2);
+        //now to check if player is on "Chance" Space
 
+        if (playerONE_position.x > 192 && playerONE_position.x < 245 && playerONE_position.y > 550)
+        {
+            if (player1.getCurrentPosition() != "Bottom Chance")
+            {
+                cout << "Player 1 moved to Bottom Chance!" << endl;
+                player1.setCurrentPosition("Bottom Chance");
+            }
+        }
+        cv::line(mainMonopolyBoard, cv::Point(245, 550), cv::Point(245, mainMonopolyBoard.rows), cv::Scalar(0, 0, 255), 1);
 
 
 
