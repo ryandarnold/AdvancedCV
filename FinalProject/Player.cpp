@@ -2,7 +2,8 @@
 #include "Player.h"
 
 // Constructor
-Player::Player(const std::string& playerName, int startingMoney): name(playerName), money(startingMoney) {}
+Player::Player(const std::string& playerName, int startingMoney, string startingPosition)
+: name(playerName), money(startingMoney), currentPosition(startingPosition) {}
 
 //-----------------------------------------------------------------------
 // Getters

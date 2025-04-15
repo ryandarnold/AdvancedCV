@@ -16,7 +16,7 @@ private:
 
 public:
     // Constructor
-    Player(const std::string& playerName, int startingMoney);
+    Player(const std::string& playerName, int startingMoney, string startingPosition);
 
     // Getters
     string getName() const;

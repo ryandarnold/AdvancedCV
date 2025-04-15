@@ -994,23 +994,43 @@ void findWhatPropertyPlayersAreOn(cv::Mat mainMonopolyBoard, vector<cv::Point2f>
     //now to find what properties each player is on
     cv::Point2f playerONE_position = playerPositions[0];
     cv::Point2f playerTWO_position = playerPositions[1];
-    cout << "Player 1 position: " << playerONE_position << endl;
-    cout << "Player 2 position: " << playerTWO_position << endl;
+    // cout << "Player 1 position: " << playerONE_position << endl;
+    // cout << "Player 2 position: " << playerTWO_position << endl;
 
     if (mainMonopolyBoard.cols > idealColumnAmount && mainMonopolyBoard.rows > idealRowAmount)
     {
         //draw a white small vertical line at x = 160, y = 513
         //NOTE: Vermont Avenue x limits: 138 to 191; y limits: (550 to mainMonopolyBoard.rows)
 
-        // cv::line(mainMonopolyBoard, cv::Point(191, 550), cv::Point(191, mainMonopolyBoard.rows), cv::Scalar(255, 255, 255), 2);
-        // cv::Rect whiteRect(138, 550, 191 - 138, mainMonopolyBoard.rows - 550);
-        // cv::rectangle(mainMonopolyBoard, whiteRect, cv::Scalar(255, 255, 255), cv::FILLED);
+
+        // struct VermontAvenuePoints
+        // {
+        //     int leftmost_x = 138; //greater than this
+        //     int rightmost_x = 191; //less than this
+        //     int topmost_y = 550; //greater than this
+        // };
         if (playerONE_position.x > 138 && playerONE_position.x < 191 && playerONE_position.y > 550)
         {
-            cout << "Player 1 is on Vermont Avenue!" << endl;
-            player1.setCurrentPosition("Vermont Avenue");
+            if (player1.getCurrentPosition() != "Vermont Avenue")
+            {
+                cout << "Player 1 moved to Vermont Avenue!" << endl;
+                player1.setCurrentPosition("Vermont Avenue");
+            }
         }
-        
+        else if (playerTWO_position.x > 138 && playerTWO_position.x < 191 && playerTWO_position.y > 550)
+        {
+            if (player1.getCurrentPosition() != "Vermont Avenue")
+            {
+                cout << "Player 2 moved to Vermont Avenue!" << endl;
+                player2.setCurrentPosition("Vermont Avenue");
+            }
+        }
+        //now to check if
+        // Draw a red line from (100, 50) to (300, 200)
+        cv::line(mainMonopolyBoard, cv::Point(100, 50), cv::Point(300, 200), cv::Scalar(0, 0, 255), 2);
+
+
+
 
     }
 }
@@ -1129,13 +1149,15 @@ int main()
     string TenDollarBill_Path = "../singleTenDollarBill_cropped.jpg";
     cv::Mat TenDollar_Image = cv::imread(TenDollarBill_Path, cv::IMREAD_COLOR);
 
-    Player player1("Alice", 10);  // name = "Alice", starting money = 10
-    Player player2("Bob", 0);    // name = "Bob", starting money = 0
+    Player player1("Alice", 10, "GO");  // name = "Alice", starting money = 10
+    Player player2("Bob", 0, "GO");    // name = "Bob", starting money = 0
+
+    cout <<"Player 1: " << player1.getName() << ", starting Money: " << player1.getMoney() << ", position: " << player1.getCurrentPosition() << endl;
+    cout <<"Player 2: " << player2.getName() << ", startingMoney: " << player2.getMoney() << ", position: " << player2.getCurrentPosition() << endl;
 
     liveVideoOfMonopolyBoard(cropped_main_monopoly_image, camera_matrix, dist_coeffs,
         PINK_PostIt_Image, BEIGE_PostIt_Image, TenDollar_Image, player1, player2);
-    cout <<"Player 1: " << player1.getName() << ", Money: " << player1.getMoney() << endl;
-    cout <<"Player 2: " << player2.getName() << ", Money: " << player2.getMoney() << endl;
+
     //above is main code for the game-------------------------------------------------------
     return 0;
 }
