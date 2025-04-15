@@ -5,6 +5,7 @@
 Player::Player(const std::string& playerName, int startingMoney)
     : name(playerName), money(startingMoney) {}
 
+//-----------------------------------------------------------------------
 // Getters
 std::string Player::getName() const
 {
@@ -14,6 +15,13 @@ int Player::getMoney() const
 {
     return money;
 }
+
+string Player::getCurrentPosition() const
+{
+    return currentPosition;
+}
+
+//-----------------------------------------------------------------------
 
 // Setters / Game Logic
 void Player::addMoney(int amount)

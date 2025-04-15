@@ -370,19 +370,8 @@ cv::Point2f findPinkPostIt(cv::Mat mainMonopolyBoard, cv::Mat gamePieceTemplate,
     }
 }
 
-void findAndDisplayPINKPostIt(cv::Mat mainMonopolyBoard, cv::Mat PINK_PostIt_Image, double threshold)
+cv::Point2f findAndDisplayPINKPostIt(cv::Mat mainMonopolyBoard, cv::Mat PINK_PostIt_Image, double threshold)
 {
-    //below is original code but doesn't work with "chance" cards section
-    // cv::Mat lightingFixedBoard = equalizeBoardLighting(mainMonopolyBoard);
-    // cv::Mat normalizedBoardLighting = equalizeLightingLABColor(mainMonopolyBoard);
-    // display_video_frame(normalizedBoardLighting, 1, "Normalized Board Lightinghhh");
-    // // cv::Point2f pinkPostItCenter = findPinkPostIt(mainMonopolyBoard, PINK_PostIt_Image, threshold);
-    // cv::Point2f pinkPostItCenter = findPinkPostIt(normalizedBoardLighting, PINK_PostIt_Image, threshold);
-    // cv::Point2f center(pinkPostItCenter.x, pinkPostItCenter.y);
-    // cv::circle(mainMonopolyBoard, center, 10, cv::Scalar(0, 0, 255), -1);
-    //above is original code but doesn't work with "chance" cards section
-
-
     //below is new code for testing without chance card section
     // Clone the board for masking during template matching
     cv::Mat maskedBoard = mainMonopolyBoard.clone();
@@ -422,7 +411,16 @@ void findAndDisplayPINKPostIt(cv::Mat mainMonopolyBoard, cv::Mat PINK_PostIt_Ima
         cv::circle(mainMonopolyBoard, pinkPostItCenter, 10, cv::Scalar(0, 0, 255), -1);
         drawLabelAbovePoint(mainMonopolyBoard, "Player 1", pinkPostItCenter, 0.5, 1, cv::Scalar(0, 0, 255));
     }
+    cv::Point intPoint = pinkPostItCenter; //convert cv::Point2f to cv::Point
     //above is new code for testing without chance card section
+    static int count = 0;
+    if (count == 0)
+    {
+        std::cout << "Pink Post-it Center: " << pinkPostItCenter << std::endl;
+        count++;
+    }
+    return pinkPostItCenter;
+
 }
 
 
@@ -529,7 +527,7 @@ cv::Mat adjustImageBrightness(const cv::Mat& inputImage, double percentage)
 
 
 
-void findAndDisplayBEIGEPostIt(cv::Mat mainMonopolyBoard, cv::Mat BEIGE_PostIt_Image, double threshold)
+cv::Point2f findAndDisplayBEIGEPostIt(cv::Mat mainMonopolyBoard, cv::Mat BEIGE_PostIt_Image, double threshold)
 {
     // display_video_frame(BEIGE_PostIt_Image, 1, "Old Beige Post it");
     // cv::Mat newBeigePostItImage = adjustImageBrightness(BEIGE_PostIt_Image, 40);
@@ -545,16 +543,23 @@ void findAndDisplayBEIGEPostIt(cv::Mat mainMonopolyBoard, cv::Mat BEIGE_PostIt_I
     cv::circle(mainMonopolyBoard, center, 10, cv::Scalar(255, 0, 255), -1);
     drawLabelAbovePoint(mainMonopolyBoard, "Player 2", beigePostItCenter, 0.5, 1, cv::Scalar(255, 0, 255));
     //above is original code but doesn't work with highly reflective surface
+    return beigePostItCenter;
+
 }
 
-void findAllGamePieces(cv::Mat current_monopoly_board_image, cv::Mat PINK_PostIt_Image, cv::Mat BEIGE_PostIt_Image)
+
+vector<cv::Point2f> findAllGamePieces(cv::Mat current_monopoly_board_image, cv::Mat PINK_PostIt_Image, cv::Mat BEIGE_PostIt_Image,
+    Player& player1, Player& player2)
 {
     //current_monopoly_board_image is the undistorted and cropped image of the game board (that has the game pieces on it)
     //PINK_PostIt_Image is the game piece that we're trying to detect on the game board (the pink post it)
+    vector<cv::Point2f> playerPositions;
+    static int count = 0;
 
-    findAndDisplayPINKPostIt(current_monopoly_board_image, PINK_PostIt_Image, 0.8);
-    findAndDisplayBEIGEPostIt(current_monopoly_board_image, BEIGE_PostIt_Image, 0.9);
+    playerPositions.push_back(findAndDisplayPINKPostIt(current_monopoly_board_image, PINK_PostIt_Image, 0.8));
+    playerPositions.push_back(findAndDisplayBEIGEPostIt(current_monopoly_board_image, BEIGE_PostIt_Image, 0.9));
 
+    return playerPositions;
 }
 
 void findHatPieceEdges(cv::Mat mainMonopolyBoard, cv::Mat gamePieceTemplate, double threshold = 0.8)
@@ -909,11 +914,6 @@ cv::Point findAndDisplayTenDollarBill(cv::Mat mainMonopolyBoard, cv::Mat TenDoll
     return center;
 }
 
-void findAllMoney(cv::Mat mainMonopolyBoard, cv::Mat TenDollar_Image)
-{
-    // cv::Point current_center = findAndDisplayTenDollarBill(mainMonopolyBoard, TenDollar_Image, 0.9);
-
-}
 
 void determineIfMoneyHasBeenExchanged(cv::Mat mainMonopolyBoard, cv::Mat TenDollar_Image, cv::Point centerOfBoard,
     Player& player1, Player& player2)
@@ -962,7 +962,7 @@ void determineIfMoneyHasBeenExchanged(cv::Mat mainMonopolyBoard, cv::Mat TenDoll
             //TODO: change below 'if statement' if i add more players
             if (averageCenter.x > centerOfBoard.x && (previousAverageCenter.x < centerOfBoard.x))
             { //money went from left (alice) to right (bob)
-                previousAverageCenter = averageCenter; //update so
+                previousAverageCenter = averageCenter; //update previous average center
                 player1.deductMoney(10);
                 player2.addMoney(10);
                 cout << "Alice lost $10, and Bob gained $10!" << endl;
@@ -972,14 +972,24 @@ void determineIfMoneyHasBeenExchanged(cv::Mat mainMonopolyBoard, cv::Mat TenDoll
             else if (averageCenter.x < centerOfBoard.x && (previousAverageCenter.x > centerOfBoard.x))
             { //money went from right (bob) to left (alice)
                 //TODO: do this else if statement (note: this only works with two players so far)
+                previousAverageCenter = averageCenter; //update previous average center
+                player1.addMoney(10);
+                player2.deductMoney(10);
+                cout << "Bob lost $10, and Alice gained $10!" << endl;
+                cout << "player 1 money" << player1.getMoney() << endl;
+                cout << "player 2 money" << player2.getMoney() << endl;
             }
-
         }
-
         counter++;
 
     }
 
+}
+
+void findWhatPropertyPlayersAreOn(cv::Mat mainMonopolyBoard, vector<cv::Point2f> playerPositions,
+    Player& player1, Player& player2)
+{
+    //now to find what properties each player is on 
 }
 
 void liveVideoOfMonopolyBoard(cv::Mat main_monopoly_image, cv::Mat camera_matrix, cv::Mat dist_coeffs,
@@ -1017,11 +1027,12 @@ void liveVideoOfMonopolyBoard(cv::Mat main_monopoly_image, cv::Mat camera_matrix
             cv::putText(cropped_board, sizeText, cv::Point(10, 50), cv::FONT_HERSHEY_SIMPLEX,
                         1.0, cv::Scalar(0, 255, 255), 1);
             //here i should call 'findAllGamePieces()' function
-            findAllGamePieces(cropped_board, PINK_PostIt_Image, BEIGE_PostIt_Image);
-            // findAllMoney(cropped_board, TenDollar_Image);
+            vector<cv::Point2f> player_positions = findAllGamePieces(cropped_board, PINK_PostIt_Image, BEIGE_PostIt_Image, player1, player2);
+
             cv::Point centerOfboard = drawVerticalCenterLine(cropped_board);
             determineIfMoneyHasBeenExchanged(cropped_board, TenDollar_Image, centerOfboard,
                 player1, player2);
+            findWhatPropertyPlayersAreOn(cropped_board, player_positions, player1, player2);
 
 
         }
