@@ -1002,7 +1002,8 @@ void findWhatPropertyPlayersAreOn(cv::Mat mainMonopolyBoard, vector<cv::Point2f>
         //draw a white small vertical line at x = 160, y = 513
         //NOTE: Vermont Avenue x limits: 138 to 191; y limits: (550 to mainMonopolyBoard.rows)
 
-        struct BoardSectionBottom
+        //TODO: will need to manually check all four corners because they're not consistent
+        struct BoardSectionBottom_struct
         {
             string name;
             int leftmost_x;
@@ -1010,56 +1011,45 @@ void findWhatPropertyPlayersAreOn(cv::Mat mainMonopolyBoard, vector<cv::Point2f>
             int topmost_y;
         };
 
-        static const vector<BoardSectionBottom> boardSections = {
+
+        //below values were found from trial and error/testing and are hardcoded for my specific camera
+
+        static const vector<BoardSectionBottom_struct> boardSectionBottom = {
+            {"Connecticut Avenue", 86, 137, 550},
             {"Vermont Avenue", 138, 191, 550},
-            {"Bottom Chance", 192, 245, 550}
+            {"Bottom Chance", 192, 245, 550},
+            {"Oriental Avenue", 246, 296, 550},
+            {"Reading Railroad", 297, 350, 550},
+            {"Income Tax", 351, 405,550},
+            {"Baltic Avenue", 406,456,550},
+            {"Community Chest", 457, 511, 550},
+            {"Mediterranean Avenue", 512, 564,550}
         };
 
-        static const vector<string> bottomPropertyNames = {"Mediterranean Avenue", "Community Chest", "Baltic Avenue",
-           "Income Tax", "Reading Railroad", "Oriental Avenue", "Chance", "Vermont Avenue", "Connecticut Avenue",};
-        static const vector<string> leftPropertyNames = {"St. Charles Place", "Electric Company", "States Avenue",
-           "Virginia Avenue", "Pennsylvania Avenue", "St. James Place", "Community Chest", "Tennessee Avenue", "New York Avenue"};
-        static const vector<string> topPropertyNames = {"Kentucky Avenue", "Chance", "Indiana Avenue",
-           "Illinois Avenue", "B&O Railroad", "Atlantic Avenue", "Ventnor Avenue", "Water Works", "Marvin Gardens"};
-        static const vector<string> rightPropertyNames = {"Pacific Avenue", "North Carolina Avenue", "Community Chest",
-           "Pennsylvania Avenue", "Short Line Railroad", "Chance", "Park Place", "Luxury Tax", "Boardwalk"};
-        static const vector<string> cornerPropertyNames = {"GO", "Jail", "Free Parking", "Go To Jail"};
         //below are for the bottom properties
-        for (int i = 0; i < /*bottomPropertyNames.size()*/ 2; i++)
+        for (int i = 0; i < boardSectionBottom.size(); i++)
         {
-            if (playerONE_position.x > boardSections[i].leftmost_x)
+            if ((boardSectionBottom[i].leftmost_x < playerONE_position.x)&&(playerONE_position.x < boardSectionBottom[i].rightmost_x)
+                &&(playerONE_position.y > boardSectionBottom[i].topmost_y) )
             {
-
+                if (player1.getCurrentPosition() != boardSectionBottom[i].name)
+                {
+                    player1.setCurrentPosition(boardSectionBottom[i].name);
+                    cout << "Player 1 moved to " << boardSectionBottom[i].name << "!" << endl;
+                }
+            }
+            if ((boardSectionBottom[i].leftmost_x < playerTWO_position.x)&&(playerTWO_position.x < boardSectionBottom[i].rightmost_x)
+                &&(playerTWO_position.y > boardSectionBottom[i].topmost_y) )
+            {
+                if (player2.getCurrentPosition() != boardSectionBottom[i].name)
+                {
+                    player2.setCurrentPosition(boardSectionBottom[i].name);
+                    cout << "Player 2 moved to " << boardSectionBottom[i].name << "!" << endl;
+                }
             }
         }
 
-        if (playerONE_position.x > 138 && playerONE_position.x < 191 && playerONE_position.y > 550)
-        {
-            if (player1.getCurrentPosition() != "Vermont Avenue")
-            {
-                cout << "Player 1 moved to Vermont Avenue!" << endl;
-                player1.setCurrentPosition("Vermont Avenue");
-            }
-        }
-        else if (playerTWO_position.x > 138 && playerTWO_position.x < 191 && playerTWO_position.y > 550)
-        {
-            if (player1.getCurrentPosition() != "Vermont Avenue")
-            {
-                cout << "Player 2 moved to Vermont Avenue!" << endl;
-                player2.setCurrentPosition("Vermont Avenue");
-            }
-        }
-        //now to check if player is on "Chance" Space
-
-        if (playerONE_position.x > 192 && playerONE_position.x < 245 && playerONE_position.y > 550)
-        {
-            if (player1.getCurrentPosition() != "Bottom Chance")
-            {
-                cout << "Player 1 moved to Bottom Chance!" << endl;
-                player1.setCurrentPosition("Bottom Chance");
-            }
-        }
-        cv::line(mainMonopolyBoard, cv::Point(245, 550), cv::Point(245, mainMonopolyBoard.rows), cv::Scalar(0, 0, 255), 1);
+        cv::line(mainMonopolyBoard, cv::Point(564, 550), cv::Point(564, mainMonopolyBoard.rows), cv::Scalar(0, 0, 255), 2);
 
 
 
@@ -1154,7 +1144,7 @@ int main()
     cv::Mat dist_coeffs = get<1>(camera_values);
 
     //Step 2: load in main monopoly board template to use for SIFT (later)
-    string main_monopoly_pic = "../../../updatedMainMonopolyImage.jpg";
+    string main_monopoly_pic = "../updatedMainMonopolyImage.jpg";
     // string scene_image = "../distorted_angled_main_monopoly_picture.jpg";
     cv::Mat main_monopoly_image = cv::imread(main_monopoly_pic, cv::IMREAD_COLOR);
     // cv::Mat current_scene_image = cv::imread(scene_image, cv::IMREAD_COLOR);
