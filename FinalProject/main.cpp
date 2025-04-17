@@ -35,7 +35,7 @@ void display_video_frame(cv::Mat videoFrameToDisplay, double Scale, string windo
     cv::imshow(window_name, resized_frame);
 }
 
-void drawLabelAbovePoint(cv::Mat& image, const std::string& label, cv::Point2f point,
+void drawLabelAbovePoint(cv::Mat& image, const std::string& label, cv::Point point,
                          double fontScale = 0.5, int thickness = 1, cv::Scalar color = cv::Scalar(0, 255, 0))
 {
     int fontFace = cv::FONT_HERSHEY_SIMPLEX;
@@ -95,11 +95,12 @@ cv::Mat SIFT_forGameBoardAlignment(cv::Mat mainBoardTemplateImage, cv::Mat curre
         throw std::invalid_argument("Error: Homography computation failed!");
     }
 
-    // Warp the second image to align with the original board image
+    // // Warp the second image to align with the original board image
     cv::Mat aligned_scene;
     cv::warpPerspective(currentFrameImage, aligned_scene, M, mainBoardTemplateImage.size());
 
-    return aligned_scene;
+    return aligned_scene; //works but is slow
+    // return M;
 }
 
 
@@ -291,7 +292,7 @@ cv::Mat rotateImage(const cv::Mat& image, int angle)
 }
 
 
-cv::Point2f findPinkPostIt(cv::Mat mainMonopolyBoard, cv::Mat gamePieceTemplate, double threshold = 0.8)
+cv::Point findPinkPostIt(cv::Mat mainMonopolyBoard, cv::Mat gamePieceTemplate, double threshold = 0.8)
 {
     //NOTE: all this function should do is find the PINK post-it note on the game board, and output the center
     //(x,y) points of the PINK post-it note. The calling function should then draw any necessary bounding boxes or
@@ -355,24 +356,24 @@ cv::Point2f findPinkPostIt(cv::Mat mainMonopolyBoard, cv::Mat gamePieceTemplate,
     if (bestMatchScore >= threshold)
     {
         // 🔹 Find the Center of the Detected Template
-        cv::Point2f center(bestMatchLoc.x + bestMatchSize.width / 2.0,
+        cv::Point center(bestMatchLoc.x + bestMatchSize.width / 2.0,
                            bestMatchLoc.y + bestMatchSize.height / 2.0);
 
         // 🔹 Draw the Correctly Rotated Bounding Box
-        cv::RotatedRect rotatedRect(center, bestMatchSize, bestRotationAngle);
-        cv::Point2f rectPoints[4];
-        rotatedRect.points(rectPoints);  // Get the 4 corner points
-
-        for (int i = 0; i < 4; i++)
-        {
-            cv::line(mainMonopolyBoard, rectPoints[i], rectPoints[(i + 1) % 4], cv::Scalar(0, 255, 255), 2);
-        }
+        // cv::RotatedRect rotatedRect(center, bestMatchSize, bestRotationAngle);
+        // cv::Point rectPoints[4];
+        // rotatedRect.points(rectPoints);  // Get the 4 corner points
+        //
+        // for (int i = 0; i < 4; i++)
+        // {
+        //     cv::line(mainMonopolyBoard, rectPoints[i], rectPoints[(i + 1) % 4], cv::Scalar(0, 255, 255), 2);
+        // }
 
         return center;
     }
 }
 
-cv::Point2f findAndDisplayPINKPostIt(cv::Mat mainMonopolyBoard, cv::Mat PINK_PostIt_Image, double threshold)
+cv::Point findAndDisplayPINKPostIt(cv::Mat mainMonopolyBoard, cv::Mat PINK_PostIt_Image, double threshold)
 {
     //below is new code for testing without chance card section
     // Clone the board for masking during template matching
@@ -404,7 +405,7 @@ cv::Point2f findAndDisplayPINKPostIt(cv::Mat mainMonopolyBoard, cv::Mat PINK_Pos
 
 
     // Run template matching on the masked image
-    cv::Point2f pinkPostItCenter = findPinkPostIt(maskedBoard, PINK_PostIt_Image, threshold);
+    cv::Point pinkPostItCenter = findPinkPostIt(maskedBoard, PINK_PostIt_Image, threshold);
 
     // If a match is found, draw a red dot
     if (pinkPostItCenter.x != -1 && pinkPostItCenter.y != -1)
@@ -426,7 +427,7 @@ cv::Point2f findAndDisplayPINKPostIt(cv::Mat mainMonopolyBoard, cv::Mat PINK_Pos
 }
 
 
-cv::Point2f findBeigePostIt(cv::Mat& mainMonopolyBoard, cv::Mat BEIGE_PostIt_Image, double threshold = 0.8)
+cv::Point findBeigePostIt(cv::Mat& mainMonopolyBoard, cv::Mat BEIGE_PostIt_Image, double threshold = 0.8)
 {
     // Resize template
     cv::Mat resizedTemplate;
@@ -472,7 +473,7 @@ cv::Point2f findBeigePostIt(cv::Mat& mainMonopolyBoard, cv::Mat BEIGE_PostIt_Ima
     if (bestMatchScore >= threshold)
     {
         // 🔹 Find the Center of the Best-Matched Template
-        cv::Point2f center(bestMatchLoc.x + bestMatchSize.width / 2.0,
+        cv::Point center(bestMatchLoc.x + bestMatchSize.width / 2.0,
                            bestMatchLoc.y + bestMatchSize.height / 2.0);
 
         // std::cout << "Best match found at: " << bestMatchLoc
@@ -481,18 +482,18 @@ cv::Point2f findBeigePostIt(cv::Mat& mainMonopolyBoard, cv::Mat BEIGE_PostIt_Ima
         //           << " | Score: " << bestMatchScore << std::endl;
 
         // 🔹 Draw the Correctly Rotated Bounding Box
-        cv::RotatedRect rotatedRect(center, bestMatchSize, bestRotationAngle);
-        cv::Point2f rectPoints[4];
-        rotatedRect.points(rectPoints);
-
-        for (int i = 0; i < 4; i++)
-        {
-            // cout <<"got to point " << rectPoints[i] << endl;
-            cv::line(mainMonopolyBoard, rectPoints[i], rectPoints[(i + 1) % 4], cv::Scalar(255, 0, 0), 2);
-            // cv::Rect debugRect(10, 10, 100, 60);  // x=10, y=10, width=100, height=60
-            // cv::rectangle(mainMonopolyBoard, debugRect, cv::Scalar(57, 150, 255), 4);
-            // display_video_frame(mainMonopolyBoard, 1, "Debug Rectangle");
-        }
+        // cv::RotatedRect rotatedRect(center, bestMatchSize, bestRotationAngle);
+        // cv::Point2f rectPoints[4];
+        // rotatedRect.points(rectPoints);
+        //
+        // for (int i = 0; i < 4; i++)
+        // {
+        //     // cout <<"got to point " << rectPoints[i] << endl;
+        //     cv::line(mainMonopolyBoard, rectPoints[i], rectPoints[(i + 1) % 4], cv::Scalar(255, 0, 0), 2);
+        //     // cv::Rect debugRect(10, 10, 100, 60);  // x=10, y=10, width=100, height=60
+        //     // cv::rectangle(mainMonopolyBoard, debugRect, cv::Scalar(57, 150, 255), 4);
+        //     // display_video_frame(mainMonopolyBoard, 1, "Debug Rectangle");
+        // }
         return center;
     }
 }
@@ -529,7 +530,7 @@ cv::Mat adjustImageBrightness(const cv::Mat& inputImage, double percentage)
 
 
 
-cv::Point2f findAndDisplayBEIGEPostIt(cv::Mat mainMonopolyBoard, cv::Mat BEIGE_PostIt_Image, double threshold)
+cv::Point findAndDisplayBEIGEPostIt(cv::Mat mainMonopolyBoard, cv::Mat BEIGE_PostIt_Image, double threshold)
 {
     // display_video_frame(BEIGE_PostIt_Image, 1, "Old Beige Post it");
     // cv::Mat newBeigePostItImage = adjustImageBrightness(BEIGE_PostIt_Image, 40);
@@ -539,8 +540,8 @@ cv::Point2f findAndDisplayBEIGEPostIt(cv::Mat mainMonopolyBoard, cv::Mat BEIGE_P
     cv::Mat normalizedBoardLighting = equalizeLightingLABColor(mainMonopolyBoard);
     // display_video_frame(normalizedBoardLighting, 1, "Lighting Fixed Board");
     // cv::Point2f beigePostItCenter = findBeigePostIt(mainMonopolyBoard, BEIGE_PostIt_Image, threshold);
-    cv::Point2f beigePostItCenter = findBeigePostIt(normalizedBoardLighting , BEIGE_PostIt_Image, threshold);
-    cv::Point2f center(beigePostItCenter.x, beigePostItCenter.y);
+    cv::Point beigePostItCenter = findBeigePostIt(normalizedBoardLighting , BEIGE_PostIt_Image, threshold);
+    cv::Point center(beigePostItCenter.x, beigePostItCenter.y);
     //NOTE: Beige Post it is COLOR MAGENTA!!!!
     cv::circle(mainMonopolyBoard, center, 10, cv::Scalar(255, 0, 255), -1);
     drawLabelAbovePoint(mainMonopolyBoard, "Player 2", beigePostItCenter, 0.5, 1, cv::Scalar(255, 0, 255));
@@ -550,12 +551,12 @@ cv::Point2f findAndDisplayBEIGEPostIt(cv::Mat mainMonopolyBoard, cv::Mat BEIGE_P
 }
 
 
-vector<cv::Point2f> findAllGamePieces(cv::Mat current_monopoly_board_image, cv::Mat PINK_PostIt_Image, cv::Mat BEIGE_PostIt_Image,
+vector<cv::Point> findAllGamePieces(cv::Mat current_monopoly_board_image, cv::Mat PINK_PostIt_Image, cv::Mat BEIGE_PostIt_Image,
     Player& player1, Player& player2)
 {
     //current_monopoly_board_image is the undistorted and cropped image of the game board (that has the game pieces on it)
     //PINK_PostIt_Image is the game piece that we're trying to detect on the game board (the pink post it)
-    vector<cv::Point2f> playerPositions;
+    vector<cv::Point> playerPositions;
     static int count = 0;
 
     playerPositions.push_back(findAndDisplayPINKPostIt(current_monopoly_board_image, PINK_PostIt_Image, 0.8));
@@ -942,11 +943,13 @@ void determineIfMoneyHasBeenExchanged(cv::Mat mainMonopolyBoard, cv::Mat TenDoll
             //only track up to 5 points at once
             trackedPoints.push_back({tenDollar_Center, "TEN_DOLLARS"});
             counter++;
+            // cout << "motherfucker";
         }
         else if (counter % 5 == 0) //update only every 5 frames
         {
             //delete the last point
-            trackedPoints.pop_back();
+            // trackedPoints.pop_back();
+            trackedPoints.erase(trackedPoints.begin());
             //add the new point
             trackedPoints.push_back({tenDollar_Center, "TEN_DOLLARS"});
             //calculate the average of the last 5 points
@@ -962,6 +965,8 @@ void determineIfMoneyHasBeenExchanged(cv::Mat mainMonopolyBoard, cv::Mat TenDoll
 
             cv::Point averageCenter(averageX, averageY);
             //TODO: change below 'if statement' if i add more players
+            cout << "average center: " << averageCenter << endl;
+            cout << "current center: " << tenDollar_Center << endl;
             if (averageCenter.x > centerOfBoard.x && (previousAverageCenter.x < centerOfBoard.x))
             { //money went from left (alice) to right (bob)
                 previousAverageCenter = averageCenter; //update previous average center
@@ -980,15 +985,16 @@ void determineIfMoneyHasBeenExchanged(cv::Mat mainMonopolyBoard, cv::Mat TenDoll
                 cout << "Bob lost $10, and Alice gained $10!" << endl;
                 cout << "player 1 money" << player1.getMoney() << endl;
                 cout << "player 2 money" << player2.getMoney() << endl;
+                counter++;
             }
         }
-        counter++;
+
 
     }
 
 }
 
-void findWhatPropertyPlayersAreOn(cv::Mat mainMonopolyBoard, vector<cv::Point2f> playerPositions,
+void findWhatPropertyPlayersAreOn(cv::Mat mainMonopolyBoard, vector<cv::Point> playerPositions,
     Player& player1, Player& player2)
 {
     //now to find what properties each player is on
@@ -1063,11 +1069,12 @@ void liveVideoOfMonopolyBoard(cv::Mat main_monopoly_image, cv::Mat camera_matrix
     cv::VideoCapture cap(CAMERA_INDEX);
     cap.set(cv::CAP_PROP_FRAME_WIDTH, 1024);
     cap.set(cv::CAP_PROP_FRAME_HEIGHT, 768); // worked very well
-    cap.set(cv::CAP_PROP_FPS, 60);
+    cap.set(cv::CAP_PROP_FPS, 30);
 
     cv::Mat currentFrame, undistorted_current_frame, warped_current_video_frame;
     cv::Mat cropped_board = cv::Mat::zeros(main_monopoly_image.rows, main_monopoly_image.cols, CV_8UC3);  // For a 3-channel image
 
+    cv::Mat M = cv::Mat::eye(3, 3, CV_32F);  // 3x3 identity matrix, double precision
     double Scale = 0.7;
     int current_frame_count = 0;
 
@@ -1076,11 +1083,18 @@ void liveVideoOfMonopolyBoard(cv::Mat main_monopoly_image, cv::Mat camera_matrix
     while (true) {
         current_frame_count++;
         cap >> currentFrame; // grab new video frame
-
+        // cv::Mat M;
         //undistorts from wide-angle to normal/flat camera
         cv::undistort(currentFrame, undistorted_current_frame, camera_matrix, dist_coeffs);
+        // if (current_frame_count % 30 == 0) //try SIFT only once a second
+        // {
+        //     M = SIFT_forGameBoardAlignment(main_monopoly_image, undistorted_current_frame);
+        // }
         if (current_frame_count % 3 == 0) //only do SIFT every 3 frames because it is computationally expensive
         {
+            // Warp the second image to align with the original board image
+            // cv::Mat warped_current_video_frame;
+            // cv::warpPerspective(undistorted_current_frame, warped_current_video_frame, M, main_monopoly_image.size());
 
             warped_current_video_frame = SIFT_forGameBoardAlignment(main_monopoly_image, undistorted_current_frame);
             cropped_board = crop_out_background(warped_current_video_frame);
@@ -1090,8 +1104,8 @@ void liveVideoOfMonopolyBoard(cv::Mat main_monopoly_image, cv::Mat camera_matrix
             std::string sizeText = "Size: " + std::to_string(cropped_board.cols) + "x" + std::to_string(cropped_board.rows);
             cv::putText(cropped_board, sizeText, cv::Point(10, 50), cv::FONT_HERSHEY_SIMPLEX,
                         1.0, cv::Scalar(0, 255, 255), 1);
-            //here i should call 'findAllGamePieces()' function
-            vector<cv::Point2f> player_positions = findAllGamePieces(cropped_board, PINK_PostIt_Image, BEIGE_PostIt_Image, player1, player2);
+
+            vector<cv::Point> player_positions = findAllGamePieces(cropped_board, PINK_PostIt_Image, BEIGE_PostIt_Image, player1, player2);
 
             cv::Point centerOfboard = drawVerticalCenterLine(cropped_board);
             determineIfMoneyHasBeenExchanged(cropped_board, TenDollar_Image, centerOfboard,
