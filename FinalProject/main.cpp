@@ -1062,8 +1062,93 @@ void findWhatPropertyPlayersAreOn(cv::Mat mainMonopolyBoard, vector<cv::Point> p
     }
 }
 
+cv::Point genericTemplateMatching(cv::Mat mainMonopolyBoard, cv::Mat templateImage, double scaleFactor,
+    vector<int> angles, double threshold, bool drawBoundingBox)
+{
+    // Resize template
+    cv::Mat resizedTemplate;
+    // double scaleFactor = 1.0 / 6;
+    cv::resize(templateImage, resizedTemplate, cv::Size(), scaleFactor, scaleFactor, cv::INTER_LINEAR);
+
+    double bestMatchScore = 0;
+    cv::Point bestMatchLoc;
+    cv::Size bestMatchSize;
+    int bestRotationAngle = 0;
+    cv::Mat bestRotatedTemplate;
+
+    // 🔹 Try all rotations (0°, 90°, 180°, 270°)
+    // std::vector<int> angles = {0, 90, 180, 270};
+    for (int angle : angles)
+    {
+        // Rotate the template
+        cv::Mat rotatedTemplate = rotateImage(resizedTemplate, angle);
+
+        // Perform Template Matching
+        cv::Mat result;
+        cv::matchTemplate(mainMonopolyBoard, rotatedTemplate, result, cv::TM_CCORR_NORMED);
+
+        // Find best match location
+        double minVal, maxVal;
+        cv::Point minLoc, maxLoc;
+        cv::minMaxLoc(result, &minVal, &maxVal, &minLoc, &maxLoc);
+
+        // Debugging: Print match scores for different angles
+        // std::cout << "Angle: " << angle << " | Match score: " << maxVal << std::endl;
+
+        // Check if this rotation is the best match so far
+        if (maxVal > bestMatchScore)
+        {
+            bestMatchScore = maxVal;
+            bestMatchLoc = maxLoc;
+            bestMatchSize = rotatedTemplate.size();  // Store correct size after rotation
+            bestRotationAngle = angle;
+            bestRotatedTemplate = rotatedTemplate.clone();
+        }
+    }
+
+    if (bestMatchScore >= threshold)
+    {
+        // 🔹 Find the Center of the Best-Matched Template
+        cv::Point center(bestMatchLoc.x + bestMatchSize.width / 2.0,
+                           bestMatchLoc.y + bestMatchSize.height / 2.0);
+
+        // std::cout << "Best match found at: " << bestMatchLoc
+        //           << " | Center: " << center
+        //           << " | Rotation: " << bestRotationAngle << ""
+        //           << " | Score: " << bestMatchScore << std::endl;
+
+
+        if (drawBoundingBox == true)
+        {
+            // 🔹 Draw the Correctly Rotated Bounding Box
+            cv::RotatedRect rotatedRect(center, bestMatchSize, bestRotationAngle);
+            cv::Point2f rectPoints[4];
+            rotatedRect.points(rectPoints);
+
+            for (int i = 0; i < 4; i++)
+            {
+                cv::line(mainMonopolyBoard, rectPoints[i], rectPoints[(i + 1) % 4], cv::Scalar(255, 0, 0), 2);
+            }
+
+        }
+        return center;
+    }
+}
+
+int findDiceRoll(cv::Mat mainMonopolyBoard, vector<cv::Mat> allDiceImages)
+{
+    vector<int> angles = {0, 90, 180, 270};
+    vector<cv::Point> diceRollLocations;
+    for (int i = 0; i < allDiceImages.size(); i++)
+    {
+        diceRollLocations.push_back(genericTemplateMatching(mainMonopolyBoard, allDiceImages[i],
+            0.2, angles, 0.9, true));
+    }
+    return 5;
+}
+
 void liveVideoOfMonopolyBoard(cv::Mat main_monopoly_image, cv::Mat camera_matrix, cv::Mat dist_coeffs,
-    cv::Mat PINK_PostIt_Image, cv::Mat BEIGE_PostIt_Image, cv::Mat TenDollar_Image, Player& player1, Player& player2)
+    cv::Mat PINK_PostIt_Image, cv::Mat BEIGE_PostIt_Image, cv::Mat TenDollar_Image, vector<cv::Mat> allDiceImages , Player& player1, Player& player2)
 {
     //this will be the main loop that will run the game and display the game board
     cv::VideoCapture cap(CAMERA_INDEX);
@@ -1111,6 +1196,7 @@ void liveVideoOfMonopolyBoard(cv::Mat main_monopoly_image, cv::Mat camera_matrix
             determineIfMoneyHasBeenExchanged(cropped_board, TenDollar_Image, centerOfboard,
                 player1, player2);
             findWhatPropertyPlayersAreOn(cropped_board, player_positions, player1, player2);
+            int current_dice_roll_number = findDiceRoll(cropped_board, allDiceImages);
 
 
         }
@@ -1127,11 +1213,10 @@ int main()
 {
     //below is for testing----------------------------------------------------------
 
-    // detectGamePiece();
     // takeASinglePicture(CAMERA_INDEX, "../singleBEIGE_PostIt_uncropped.jpg");
     // takeASinglePicture(CAMERA_INDEX, "../singleFrameOfRED_PostIt_OnMonopolyBoard_LEFT_distorted.jpg");
 
-    // takeASinglePicture(CAMERA_INDEX, "../singleTenDollarBill_uncropped.jpg");
+    // takeASinglePicture(CAMERA_INDEX, "../DICE_value_ONE_uncropped.jpg");
     // return 0;
     //above is for testing----------------------------------------------------------
 
@@ -1190,8 +1275,13 @@ int main()
     cout <<"Player 1: " << player1.getName() << ", starting Money: " << player1.getMoney() << ", position: " << player1.getCurrentPosition() << endl;
     cout <<"Player 2: " << player2.getName() << ", startingMoney: " << player2.getMoney() << ", position: " << player2.getCurrentPosition() << endl;
 
+    cv::Mat dice_ONE = cv::imread("../DICE_value_ONE_cropped.jpg", cv::IMREAD_COLOR);
+    vector<cv::Mat> allDiceImages;
+    allDiceImages.push_back(dice_ONE);
+
+
     liveVideoOfMonopolyBoard(cropped_main_monopoly_image, camera_matrix, dist_coeffs,
-        PINK_PostIt_Image, BEIGE_PostIt_Image, TenDollar_Image, player1, player2);
+        PINK_PostIt_Image, BEIGE_PostIt_Image, TenDollar_Image, allDiceImages, player1, player2);
 
     //above is main code for the game-------------------------------------------------------
     return 0;
