@@ -56,7 +56,7 @@ cv::Mat SIFT_forGameBoardAlignment(cv::Mat mainBoardTemplateImage, cv::Mat curre
     // Create SIFT detector
     cv::Ptr<cv::SIFT> sift = cv::SIFT::create();
 
-    // Detect keypoints and compute descriptors
+    // Detects all keypoints in main board template image and current frame image
     std::vector<cv::KeyPoint> kp1, kp2;
     cv::Mat des1, des2;
     sift->detectAndCompute(mainBoardTemplateImage, cv::noArray(), kp1, des1);
@@ -67,7 +67,7 @@ cv::Mat SIFT_forGameBoardAlignment(cv::Mat mainBoardTemplateImage, cv::Mat curre
     std::vector<std::vector<cv::DMatch>> knn_matches;
     matcher.knnMatch(des1, des2, knn_matches, 2);  // Find 2 nearest matches for each descriptor
 
-    // Apply Lowe’s Ratio Test
+    // Apply Lowe’s Ratio Test to find only the BEST matches
     std::vector<cv::DMatch> good_matches;
     for (auto& m : knn_matches) {
         if (m[0].distance < 0.75 * m[1].distance) {  // Lowe's Ratio Test
@@ -82,16 +82,17 @@ cv::Mat SIFT_forGameBoardAlignment(cv::Mat mainBoardTemplateImage, cv::Mat curre
     }
 
     // Extract keypoint coordinates
-    std::vector<cv::Point2f> src_pts, dst_pts;
+    std::vector<cv::Point2f> src_pts, dst_pts; //src is main template, dst is current frame
     for (auto& match : good_matches) {
         src_pts.push_back(kp1[match.queryIdx].pt); // Points in the original Monopoly board image
         dst_pts.push_back(kp2[match.trainIdx].pt); // Corresponding points in the second image
     }
 
-    // Compute homography using RANSAC
+    // Compute homography using RANSAC after getting all source and destination points
     cv::Mat M = cv::findHomography(dst_pts, src_pts, cv::RANSAC);
 
-    if (M.empty()) {
+    if (M.empty())
+    {
         throw std::invalid_argument("Error: Homography computation failed!");
     }
 
@@ -181,18 +182,26 @@ cv::Mat crop_out_background(cv::Mat current_frame)
     cv::Mat binary;
     cv::threshold(gray, binary, 100, 255, cv::THRESH_BINARY);
 
-    // Find contours of the image
-    std::vector<std::vector<cv::Point>> contours;
+    // Find contours of the image using binary image
+    std::vector<std::vector<cv::Point>> contours; //vector of vector of points that are contours
+    //stores relationship between contours
+    //i.e. next contour, previous contour, child contour, parent contour
+    // in a hierarchy
     std::vector<cv::Vec4i> hierarchy;
+    //RETR_EXTERNAL means we only want the outermost contours (main board outline)
+    //CHAIN_APPROX_SIMPLE uses compression to save memory
     cv::findContours(binary, contours, hierarchy, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
 
-    // Find the largest contour (assuming it's the Monopoly board)
-    int largest_contour_index = -1;
-    double max_area = 0;
-    for (size_t i = 0; i < contours.size(); i++) {
-        double area = cv::contourArea(contours[i]);
-        if (area > max_area) {
-            max_area = area;
+
+    // Find the largest contour
+    int largest_contour_index = -1; //stores the index of the largest contour
+    double max_area = 0; // stores the area of the largest contour
+    for (size_t i = 0; i < contours.size(); i++)
+    {
+        double area = cv::contourArea(contours[i]); //finds area of current contour
+        if (area > max_area)
+        {
+            max_area = area; //only used to find the largest contour
             largest_contour_index = i;
         }
     }
@@ -203,17 +212,13 @@ cv::Mat crop_out_background(cv::Mat current_frame)
     }
 
     // Get the bounding box of the largest contour
+    //contours[largest_contour_index] is a vector of 2D points outlining that contour
+    //boundingRect returns the smallest rectangle that contains all the points in the contour
+    //so if the contour is generally a square, the bounding box will be a square
     cv::Rect board_rect = cv::boundingRect(contours[largest_contour_index]);
 
     // Crop the Monopoly board from the image
     cv::Mat cropped_board = current_frame(board_rect);
-
-    // Show results
-    // cv::imshow("Detected Board", current_frame);
-    // display_image(current_frame, 0.5, "Detected Monopoly Board");
-    // cv::imshow("Cropped Monopoly Board", cropped_board);
-    // display_image(cropped_board, 0.5, "Cropped Monopoly Board");
-    // cv::waitKey(0);
 
     return cropped_board;
 }
@@ -336,19 +341,18 @@ cv::Point findPinkPostIt(cv::Mat mainMonopolyBoard, cv::Mat gamePieceTemplate, d
         cv::Mat result;
         cv::matchTemplate(mainMonopolyBoard, rotatedTemplate, result, cv::TM_CCORR_NORMED);
 
-        // Find best match location
+        // Find min and max values in "result", and their locations
         double minVal, maxVal;
         cv::Point minLoc, maxLoc;
         cv::minMaxLoc(result, &minVal, &maxVal, &minLoc, &maxLoc);
 
-        // std::cout << "Rotation: " << angle << "° | Match score: " << maxVal << std::endl;
 
         // Check if the current match score is better
         if (maxVal > bestMatchScore)
         {
-            bestMatchScore = maxVal;
-            bestMatchLoc = maxLoc;
-            bestMatchSize = rotatedTemplate.size();
+            bestMatchScore = maxVal; // Update best match score
+            bestMatchLoc = maxLoc; // Update best match location. NOTE: bestMatchLoc is the top-left corner of the bounding box
+            bestMatchSize = rotatedTemplate.size(); // Store correct size after rotation
             bestRotationAngle = angle;
         }
     }
@@ -942,7 +946,7 @@ void determineIfMoneyHasBeenExchanged(cv::Mat mainMonopolyBoard, cv::Mat TenDoll
         {
             //only track up to 5 points at once
             trackedPoints.push_back({tenDollar_Center, "TEN_DOLLARS"});
-            counter++;
+            // counter++;
             // cout << "motherfucker";
         }
         else if (counter % 5 == 0) //update only every 5 frames
@@ -965,11 +969,11 @@ void determineIfMoneyHasBeenExchanged(cv::Mat mainMonopolyBoard, cv::Mat TenDoll
 
             cv::Point averageCenter(averageX, averageY);
             //TODO: change below 'if statement' if i add more players
-            cout << "average center: " << averageCenter << endl;
-            cout << "current center: " << tenDollar_Center << endl;
+            // cout << "average center: " << averageCenter << endl;
+            // cout << "current center: " << tenDollar_Center << endl;
             if (averageCenter.x > centerOfBoard.x && (previousAverageCenter.x < centerOfBoard.x))
             { //money went from left (alice) to right (bob)
-                previousAverageCenter = averageCenter; //update previous average center
+                // previousAverageCenter = averageCenter; //update previous average center
                 player1.deductMoney(10);
                 player2.addMoney(10);
                 cout << "Alice lost $10, and Bob gained $10!" << endl;
@@ -979,19 +983,18 @@ void determineIfMoneyHasBeenExchanged(cv::Mat mainMonopolyBoard, cv::Mat TenDoll
             else if (averageCenter.x < centerOfBoard.x && (previousAverageCenter.x > centerOfBoard.x))
             { //money went from right (bob) to left (alice)
                 //TODO: do this else if statement (note: this only works with two players so far)
-                previousAverageCenter = averageCenter; //update previous average center
+                // previousAverageCenter = averageCenter; //update previous average center
                 player1.addMoney(10);
                 player2.deductMoney(10);
                 cout << "Bob lost $10, and Alice gained $10!" << endl;
                 cout << "player 1 money" << player1.getMoney() << endl;
                 cout << "player 2 money" << player2.getMoney() << endl;
-                counter++;
+
             }
+            previousAverageCenter = averageCenter; //update previous average center
         }
-
-
+        counter++;
     }
-
 }
 
 void findWhatPropertyPlayersAreOn(cv::Mat mainMonopolyBoard, vector<cv::Point> playerPositions,
@@ -1054,9 +1057,7 @@ void findWhatPropertyPlayersAreOn(cv::Mat mainMonopolyBoard, vector<cv::Point> p
                 }
             }
         }
-
-        cv::line(mainMonopolyBoard, cv::Point(564, 550), cv::Point(564, mainMonopolyBoard.rows), cv::Scalar(0, 0, 255), 2);
-
+        // cv::line(mainMonopolyBoard, cv::Point(564, 550), cv::Point(564, mainMonopolyBoard.rows), cv::Scalar(0, 0, 255), 2);
 
 
     }
@@ -1182,23 +1183,22 @@ void liveVideoOfMonopolyBoard(cv::Mat main_monopoly_image, cv::Mat camera_matrix
             // cv::warpPerspective(undistorted_current_frame, warped_current_video_frame, M, main_monopoly_image.size());
 
             warped_current_video_frame = SIFT_forGameBoardAlignment(main_monopoly_image, undistorted_current_frame);
+            // display_video_frame(warped_current_video_frame, Scale, "Warped frame without cropping :D");
             cropped_board = crop_out_background(warped_current_video_frame);
             //need to rotate because SIFT changes the rotation
             cv::rotate(cropped_board, cropped_board, cv::ROTATE_90_COUNTERCLOCKWISE);
-            // Display image size
+            // // Display image size
             std::string sizeText = "Size: " + std::to_string(cropped_board.cols) + "x" + std::to_string(cropped_board.rows);
             cv::putText(cropped_board, sizeText, cv::Point(10, 50), cv::FONT_HERSHEY_SIMPLEX,
                         1.0, cv::Scalar(0, 255, 255), 1);
-
+            //
             vector<cv::Point> player_positions = findAllGamePieces(cropped_board, PINK_PostIt_Image, BEIGE_PostIt_Image, player1, player2);
 
             cv::Point centerOfboard = drawVerticalCenterLine(cropped_board);
             determineIfMoneyHasBeenExchanged(cropped_board, TenDollar_Image, centerOfboard,
                 player1, player2);
             findWhatPropertyPlayersAreOn(cropped_board, player_positions, player1, player2);
-            int current_dice_roll_number = findDiceRoll(cropped_board, allDiceImages);
-
-
+            // // int current_dice_roll_number = findDiceRoll(cropped_board, allDiceImages);
         }
         display_video_frame(cropped_board, Scale, "Live Camera Feed");
 

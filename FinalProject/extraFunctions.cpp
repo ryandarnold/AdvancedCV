@@ -17,14 +17,15 @@ void findCameraDetails()
     cv::Size board_size(chessboard_width, chessboard_height);
 
     // Vectors to store object points and image points
-    std::vector<std::vector<cv::Point3f>> object_points;
-    std::vector<std::vector<cv::Point2f>> image_points;
+    std::vector<std::vector<cv::Point3f>> object_points; // 3D points in real world space
+    std::vector<std::vector<cv::Point2f>> image_points;  //same 3D points but in 2D image space
 
     // Prepare object points (3D coordinates of chessboard corners)
+    // aka Creates a 2D grid of 3D points on the Z=0 plane.
     std::vector<cv::Point3f> objp;
     for (int i = 0; i < chessboard_height; i++) {
         for (int j = 0; j < chessboard_width; j++) {
-            objp.push_back(cv::Point3f(j, i, 0)); // Assume z=0 since chessboard is flat
+            objp.push_back(cv::Point3f(j, i, 0)); // Assume z=0 since chessboard is flat, and z is always the same
         }
     }
 
@@ -33,23 +34,23 @@ void findCameraDetails()
     cv::glob("../../../calibration_images/*.jpg", images);  // Ensure images are in this folder
 
     cv::Mat frame, gray;
-    for (const auto& img_file : images) {
-        frame = cv::imread(img_file);
+    for (const auto& img_file : images)
+    {
+        frame = cv::imread(img_file); //grab current calibration images (which are chessboard images)
         if (frame.empty()) continue;
 
-        cv::cvtColor(frame, gray, cv::COLOR_BGR2GRAY);
+        cv::cvtColor(frame, gray, cv::COLOR_BGR2GRAY); //chessboard calibration works best in grayscale
 
         // Detect chessboard corners
         std::vector<cv::Point2f> corners;
-        bool found = cv::findChessboardCorners(gray, board_size, corners);
+        bool found = cv::findChessboardCorners(gray, board_size, corners); //main function that detects the chessboard corners
 
         if (found) {
-            // Refine corner detection for better accuracy
-            cv::cornerSubPix(gray, corners, cv::Size(11, 11), cv::Size(-1, -1),
-                             cv::TermCriteria(cv::TermCriteria::EPS + cv::TermCriteria::COUNT, 30, 0.01));
+            //now 'corners' matrix will have the 2D coordinates of the chessboard corners
 
-            image_points.push_back(corners);
-            object_points.push_back(objp);
+            //build up many object --> image mappings
+            image_points.push_back(corners); //put all corner coordinates into the image_points vector
+            object_points.push_back(objp);   //
 
             // Draw detected corners
             cv::drawChessboardCorners(frame, board_size, corners, found);
@@ -61,6 +62,20 @@ void findCameraDetails()
     cv::destroyAllWindows();
 
     // Camera calibration
+    //camera_matrix is a 3x3 matrix that contains the intrinsic parameters of the camera
+    //ex:
+    // [[fx, 0, cx],
+    //  [0, fy, cy],
+    //  [0, 0, 1]]
+    //where fx and fy are the focal lengths in pixels, and cx and cy are the coordinates of the optical center (principal point).
+
+    //dist_coeffs is a vector of distortion coefficients that describe the lens distortion = [k1, k2, p1, p2, k3]
+    //where k1, k2, k3 are radial distortion coefficients, and p1, p2 are tangential distortion coefficients
+    //(radial distortion means straight lines in real world appear to be curved in the image)
+    //(and tangential distortion means the lens and image plane are not perfectly parallel. i.e. the image isn't flat)
+
+    //rvecs tells how the camera is rotated with respect to the chessboard in each image
+    //tvecs tells where the chessboard is in 3D space relative to the camera
     cv::Mat camera_matrix, dist_coeffs, rvecs, tvecs;
     cv::calibrateCamera(object_points, image_points, gray.size(), camera_matrix, dist_coeffs, rvecs, tvecs);
 
