@@ -10,7 +10,7 @@ class Player {
 private:
     string name;
     int money;
-    // Add any other player attributes here (e.g., position on the board, properties owned, etc.)
+    // Add any other player attributes here ( position on the board, properties owned, etc.)
     vector<string> propertiesOwned;
     string currentPosition;
 

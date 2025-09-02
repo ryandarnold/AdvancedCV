@@ -91,8 +91,7 @@ void findCameraDetails()
 
 tuple<cv::Mat, cv::Mat> findIntrinsicCameraMatrices()
 {
-    //TODO: only call this function once, and then output the camera_matrix and dist_coeffs to the calling function
-    // because accessing file storage will be really slow if you do it at 30fps
+    //This function loads the camera matrix and distortion coefficients from a file
 
     // Load calibration parameters
     cv::FileStorage fs("../camera_calibration.yml", cv::FileStorage::READ);
@@ -106,6 +105,8 @@ tuple<cv::Mat, cv::Mat> findIntrinsicCameraMatrices()
 
 void testVideoWithUndistortingEachFrame(int CAMERA_INDEX, cv::Mat camera_matrix, cv::Mat dist_coeffs)
 {
+    //This function is just for testing to see if undistorting each frame with the homography found by
+    // SIFT works
     cv::VideoCapture cap(CAMERA_INDEX); // Open the default camera (0 for the first camera)
 
     cap.set(cv::CAP_PROP_FRAME_WIDTH, 1024);
@@ -125,7 +126,6 @@ void testVideoWithUndistortingEachFrame(int CAMERA_INDEX, cv::Mat camera_matrix,
         cv::undistort(frame, undistorted_frame, camera_matrix, dist_coeffs);
         cv::imshow("Live Camera Feed", undistorted_frame);
 
-
         // Check if any key is pressed
         int key = cv::waitKey(1);
         if (key >= 0) // Any key detected
@@ -140,9 +140,8 @@ void testVideoWithUndistortingEachFrame(int CAMERA_INDEX, cv::Mat camera_matrix,
 
 void takeMultiplePictures(int CAMERA_INDEX, string imageName, int numImages)
 {
-    // string cameraCalibration_path = "../../../calibration_images/"; //all .jpg images in folder
-    // string imageName = "imageHEHE";
-    // takeMultiplePictures(cameraCalibration_path, CAMERA_INDEX, imageName, 10);
+    //This function allows you to take multiple pictures with the camera and save them to the specified path
+    // in one go
     cout << "starting to take multiple pictures" << endl;
     for (int i = 0; i < numImages; i++)
     {
@@ -153,6 +152,7 @@ void takeMultiplePictures(int CAMERA_INDEX, string imageName, int numImages)
 
 void takeASinglePicture(int CAMERA_INDEX, string imagePathANDnameANDextension)
 {
+    //This function just takes a single picture with the camera and saves it to the specified path
     //NOTE: this function does NOT undistort the image using the camera intrinsics to account for barrel warping
     cout << "camera index: " + CAMERA_INDEX << endl;
     cv::VideoCapture cap(CAMERA_INDEX); // Open the default camera (0 for the first camera)
@@ -198,12 +198,9 @@ void takeASinglePicture(int CAMERA_INDEX, string imagePathANDnameANDextension)
 
 void takeASingleVideo(int CAMERA_INDEX)
 {
+    //This function tests taking a video at different frames per second
     cv::VideoCapture cap(CAMERA_INDEX); // Open the default camera (0 for the first camera)
     cv::VideoWriter writer;
-    // std::cout << "Current Width: " << cap.get(cv::CAP_PROP_FRAME_WIDTH) << std::endl;
-    // std::cout << "Current Height: " << cap.get(cv::CAP_PROP_FRAME_HEIGHT) << std::endl;
-    // std::cout << "Current FPS: " << cap.get(cv::CAP_PROP_FPS) << std::endl;
-
 
     // cap.set(cv::CAP_PROP_FRAME_WIDTH, 1920);
     // cap.set(cv::CAP_PROP_FRAME_HEIGHT, 1080); //best resolution but way too laggy for real-time detection
@@ -214,7 +211,6 @@ void takeASingleVideo(int CAMERA_INDEX)
     int frame_height = static_cast<int>(cap.get(cv::CAP_PROP_FRAME_HEIGHT));
     double fps = cap.get(cv::CAP_PROP_FPS);
     std::cout << "Camera FPS: " << fps << std::endl;
-
 
     bool recording = false;
     // int imageCount = 1; // Counter for saved images
@@ -291,6 +287,7 @@ void gettingSingleFrameFromAngledVideo()
 
 void measureFPS(int CAMERA_INDEX)
 {
+    //This function measures the actual frames per second (FPS) of the camera feed
     cv::VideoCapture cap(CAMERA_INDEX); // Open default camera
     cv::Mat frame;
     std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
@@ -321,130 +318,3 @@ void measureFPS(int CAMERA_INDEX)
     cap.release();
     cv::destroyAllWindows();
 }
-
-//below is working SIFT code that i'm storing in case the new chatgpt code doesn't work!
-// cv::Mat SIFT_forGameBoardAlignment(cv::Mat mainBoardTemplateImage, cv::Mat currentFrameImage)
-// {
-//     //this function will try to warp the current frame image to match the main board template image
-//     //using the SIFT algorithm, so that they're aligned as much as possible
-//
-//
-//     // Create SIFT detector
-//     cv::Ptr<cv::SIFT> sift = cv::SIFT::create();
-//
-//     // Detect keypoints and compute descriptors
-//     std::vector<cv::KeyPoint> kp1, kp2;
-//     cv::Mat des1, des2;
-//     sift->detectAndCompute(mainBoardTemplateImage, cv::noArray(), kp1, des1);
-//     sift->detectAndCompute(currentFrameImage, cv::noArray(), kp2, des2);
-//
-//     // Use FLANN-based matcher
-//     cv::FlannBasedMatcher matcher;
-//     std::vector<std::vector<cv::DMatch>> knn_matches;
-//     matcher.knnMatch(des1, des2, knn_matches, 2);  // Find 2 nearest matches for each descriptor
-//
-//     // Apply Lowe’s Ratio Test
-//     std::vector<cv::DMatch> good_matches;
-//     for (auto& m : knn_matches) {
-//         if (m[0].distance < 0.75 * m[1].distance) {  // Lowe's Ratio Test
-//             good_matches.push_back(m[0]);
-//         }
-//     }
-//
-//     // Ensure enough good matches exist for homography
-//     if (good_matches.size() < 10) {
-//         //std::cout << "Error: Not enough good matches to compute homography!" << std::endl;
-//         throw std::invalid_argument("Error: Not enough good matches to compute homography!");
-//     }
-//
-//     // Extract keypoint coordinates
-//     std::vector<cv::Point2f> src_pts, dst_pts;
-//     for (auto& match : good_matches) {
-//         src_pts.push_back(kp1[match.queryIdx].pt); // Points in the original Monopoly board image
-//         dst_pts.push_back(kp2[match.trainIdx].pt); // Corresponding points in the second image
-//     }
-//
-//     // Compute homography using RANSAC
-//     cv::Mat M = cv::findHomography(dst_pts, src_pts, cv::RANSAC);
-//
-//     if (M.empty()) {
-//         throw std::invalid_argument("Error: Homography computation failed!");
-//     }
-//
-//     // Warp the second image to align with the original board image
-//     cv::Mat aligned_scene;
-//     cv::warpPerspective(currentFrameImage, aligned_scene, M, mainBoardTemplateImage.size());
-//
-//     return aligned_scene;
-// }
-//above is working SIFT code that i'm storing in case the new chatgpt code doesn't work!
-
-//below is SIFT code that outputs the warped image and the center point of the matched points
-// tuple<cv::Mat, cv::Point2f> SIFT_forGameBoardAlignment(cv::Mat mainBoardTemplateImage, cv::Mat currentFrameImage)
-// {
-//     // 🔹 Step 1: Convert to Grayscale
-//     cv::Mat edgesTemplate, edgesFrame;
-//     cv::cvtColor(mainBoardTemplateImage, edgesTemplate, cv::COLOR_BGR2GRAY);
-//     cv::cvtColor(currentFrameImage, edgesFrame, cv::COLOR_BGR2GRAY);
-//
-//     // 🔹 Step 2: Apply Canny Edge Detection
-//     cv::Canny(edgesTemplate, edgesTemplate, 50, 150);
-//     cv::Canny(edgesFrame, edgesFrame, 50, 150);
-//
-//     // 🔹 Step 3: Create SIFT detector
-//     cv::Ptr<cv::SIFT> sift = cv::SIFT::create();
-//
-//     // 🔹 Step 4: Detect keypoints & compute descriptors **on edge-detected images**
-//     std::vector<cv::KeyPoint> kp1, kp2;
-//     cv::Mat des1, des2;
-//     sift->detectAndCompute(edgesTemplate, cv::noArray(), kp1, des1);
-//     sift->detectAndCompute(edgesFrame, cv::noArray(), kp2, des2);
-//
-//     // 🔹 Step 5: Use FLANN-based matcher
-//     cv::FlannBasedMatcher matcher;
-//     std::vector<std::vector<cv::DMatch>> knn_matches;
-//     matcher.knnMatch(des1, des2, knn_matches, 2);
-//
-//     // 🔹 Step 6: Apply Lowe’s Ratio Test
-//     std::vector<cv::DMatch> good_matches;
-//     for (auto& m : knn_matches) {
-//         if (m[0].distance < 0.5 * m[1].distance) {
-//             good_matches.push_back(m[0]);
-//         }
-//     }
-//
-//     // 🔹 Step 7: Ensure enough good matches exist for homography
-//     if (good_matches.size() < 10) {
-//         throw std::invalid_argument("Error: Not enough good matches to compute homography!");
-//     }
-//
-//     // 🔹 Step 8: Extract keypoint coordinates
-//     std::vector<cv::Point2f> src_pts, dst_pts;
-//     for (auto& match : good_matches) {
-//         src_pts.push_back(kp1[match.queryIdx].pt); // Points in mainBoardTemplateImage
-//         dst_pts.push_back(kp2[match.trainIdx].pt); // Points in currentFrameImage
-//     }
-//
-//     // 🔹 Step 9: Compute homography using RANSAC
-//     cv::Mat M = cv::findHomography(dst_pts, src_pts, cv::RANSAC);
-//     if (M.empty()) {
-//         throw std::invalid_argument("Error: Homography computation failed!");
-//     }
-//
-//     // 🔹 Step 10: Warp the current frame to align with the template
-//     cv::Mat aligned_scene;
-//     cv::warpPerspective(currentFrameImage, aligned_scene, M, mainBoardTemplateImage.size());
-//
-//     // 🔹 Step 11: Calculate the center of matched points in `mainBoardTemplateImage`
-//     cv::Point2f center(0, 0);
-//     for (const auto& pt : src_pts) {
-//         center.x += pt.x;
-//         center.y += pt.y;
-//     }
-//     center.x /= src_pts.size();
-//     center.y /= src_pts.size();
-//
-//     return {aligned_scene, center};
-// }
-
-//above is SIFT code that outputs the warped image and the center point of the matched points

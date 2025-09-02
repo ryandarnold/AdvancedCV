@@ -1,6 +1,5 @@
 #include <iostream>
 #include <opencv2/opencv.hpp>
-#include <chrono>
 #include "extraFunctions.h"
 #include <tuple>
 #include "Player.h" //"" for my own header files, <> for system header files
@@ -52,7 +51,6 @@ cv::Mat SIFT_forGameBoardAlignment(cv::Mat mainBoardTemplateImage, cv::Mat curre
     //this function will try to warp the current frame image to match the main board template image
     //using the SIFT algorithm, so that they're aligned as much as possible
 
-
     // Create SIFT detector
     cv::Ptr<cv::SIFT> sift = cv::SIFT::create();
 
@@ -101,75 +99,8 @@ cv::Mat SIFT_forGameBoardAlignment(cv::Mat mainBoardTemplateImage, cv::Mat curre
     cv::warpPerspective(currentFrameImage, aligned_scene, M, mainBoardTemplateImage.size());
 
     return aligned_scene; //works but is slow
-    // return M;
 }
 
-
-tuple<cv::Mat, cv::Point2f> ORB_forGameBoardAlignment(cv::Mat mainBoardTemplateImage, cv::Mat currentFrameImage)
-{
-    // 🔹 Step 1: Convert to Grayscale
-    cv::Mat edgesTemplate, edgesFrame;
-    cv::cvtColor(mainBoardTemplateImage, edgesTemplate, cv::COLOR_BGR2GRAY);
-    cv::cvtColor(currentFrameImage, edgesFrame, cv::COLOR_BGR2GRAY);
-
-    // 🔹 Step 2: Apply Canny Edge Detection
-    cv::Canny(edgesTemplate, edgesTemplate, 50, 150);
-    cv::Canny(edgesFrame, edgesFrame, 50, 150);
-
-    // 🔹 Step 3: Create ORB detector
-    cv::Ptr<cv::ORB> orb = cv::ORB::create(2000, 1.2f, 25); // Increase keypoints
-
-    // 🔹 Step 4: Detect keypoints & compute descriptors **on edge images**
-    std::vector<cv::KeyPoint> kp1, kp2;
-    cv::Mat des1, des2;
-    orb->detectAndCompute(edgesTemplate, cv::noArray(), kp1, des1);
-    orb->detectAndCompute(edgesFrame, cv::noArray(), kp2, des2);
-
-    // 🔹 Step 5: Use Brute-Force Matcher with Cross-Checking
-    cv::BFMatcher matcher(cv::NORM_HAMMING, true);
-    std::vector<cv::DMatch> matches;
-    matcher.match(des1, des2, matches);
-
-    // 🔹 Step 6: Sort Matches & Keep the Best
-    std::sort(matches.begin(), matches.end(),
-              [](const cv::DMatch& a, const cv::DMatch& b) { return a.distance < b.distance; });
-
-    int num_best_matches = std::min(20, (int)matches.size());
-    std::vector<cv::DMatch> good_matches(matches.begin(), matches.begin() + num_best_matches);
-
-    if (good_matches.size() < 10) {
-        throw std::invalid_argument("Error: Not enough good matches to compute homography!");
-    }
-
-    // 🔹 Step 7: Extract keypoint coordinates
-    std::vector<cv::Point2f> src_pts, dst_pts;
-    for (auto& match : good_matches) {
-        src_pts.push_back(kp1[match.queryIdx].pt);
-        dst_pts.push_back(kp2[match.trainIdx].pt);
-    }
-
-    // 🔹 Step 8: Compute Homography
-    std::vector<uchar> inliers_mask;
-    cv::Mat M = cv::findHomography(dst_pts, src_pts, cv::RANSAC, 3, inliers_mask);
-    if (M.empty()) {
-        throw std::invalid_argument("Error: Homography computation failed!");
-    }
-
-    // 🔹 Step 9: Warp Image
-    cv::Mat aligned_scene;
-    cv::warpPerspective(currentFrameImage, aligned_scene, M, mainBoardTemplateImage.size());
-
-    // 🔹 Step 10: Calculate the Center of Matched Points
-    cv::Point2f center(0, 0);
-    for (const auto& pt : src_pts) {
-        center.x += pt.x;
-        center.y += pt.y;
-    }
-    center.x /= src_pts.size();
-    center.y /= src_pts.size();
-
-    return {aligned_scene, center};
-}
 
 
 cv::Mat crop_out_background(cv::Mat current_frame)
@@ -224,34 +155,6 @@ cv::Mat crop_out_background(cv::Mat current_frame)
 }
 
 
-cv::Mat equalizeBoardLighting(const cv::Mat& inputImage)
-{
-    // Convert from BGR to LAB color space
-    cv::Mat labImage;
-    cv::cvtColor(inputImage, labImage, cv::COLOR_BGR2Lab);
-
-    // Split LAB into individual channels
-    std::vector<cv::Mat> labChannels(3);
-    cv::split(labImage, labChannels);
-
-    // Equalize or normalize the L channel (brightness)
-    // Option 1: Histogram equalization (stronger, may affect contrast)
-    // cv::equalizeHist(labChannels[0], labChannels[0]);
-
-    // Option 2: Normalize (smoother results, recommended for your use)
-    cv::normalize(labChannels[0], labChannels[0], 0, 255, cv::NORM_MINMAX);
-
-    // Merge the channels back
-    cv::Mat equalizedLab;
-    cv::merge(labChannels, equalizedLab);
-
-    // Convert back to BGR
-    cv::Mat outputImage;
-    cv::cvtColor(equalizedLab, outputImage, cv::COLOR_Lab2BGR);
-
-    return outputImage;
-}
-
 cv::Mat equalizeLightingLABColor(const cv::Mat& inputImage) {
     cv::Mat lab;
     cv::cvtColor(inputImage, lab, cv::COLOR_BGR2Lab);
@@ -273,7 +176,6 @@ cv::Mat equalizeLightingLABColor(const cv::Mat& inputImage) {
     cv::cvtColor(lab, result, cv::COLOR_Lab2BGR);
     return result;
 }
-
 
 
 // Helper function to rotate the template image
@@ -319,7 +221,6 @@ cv::Point findPinkPostIt(cv::Mat mainMonopolyBoard, cv::Mat gamePieceTemplate, d
     //1/4.5 works well
     double scaleFactor = 1.0 / 4.5; // had to resize because the template was WAY too big compared to actual game piece
     cv::resize(gamePieceTemplate, resizedTemplate, cv::Size(), scaleFactor, scaleFactor, cv::INTER_LINEAR);
-    // std::cout << "Resized Template Size: " << resizedTemplate.cols << " x " << resizedTemplate.rows << std::endl;
 
     double bestMatchScore = 0;
     cv::Point bestMatchLoc;
@@ -328,14 +229,9 @@ cv::Point findPinkPostIt(cv::Mat mainMonopolyBoard, cv::Mat gamePieceTemplate, d
 
     // 🔹 Try all rotations (0°, 90°, 180°, 270°)
     std::vector<int> angles = {0, 90, 180, 270};
-    // cv::Mat rotatedTemplate = rotateImage(resizedTemplate, 90);
-    // display_video_frame(rotatedTemplate, 1, "Rotated Template");
-    // display_video_frame(gamePieceTemplate, 1, "Original Template Template");
     for (int angle : angles)
     {
         cv::Mat rotatedTemplate = rotateImage(resizedTemplate, angle);
-
-        // std::cout << "Rotating template by " << angle << " degrees." << std::endl;
 
         // Perform Template Matching
         cv::Mat result;
@@ -362,16 +258,6 @@ cv::Point findPinkPostIt(cv::Mat mainMonopolyBoard, cv::Mat gamePieceTemplate, d
         // 🔹 Find the Center of the Detected Template
         cv::Point center(bestMatchLoc.x + bestMatchSize.width / 2.0,
                            bestMatchLoc.y + bestMatchSize.height / 2.0);
-
-        // 🔹 Draw the Correctly Rotated Bounding Box
-        // cv::RotatedRect rotatedRect(center, bestMatchSize, bestRotationAngle);
-        // cv::Point rectPoints[4];
-        // rotatedRect.points(rectPoints);  // Get the 4 corner points
-        //
-        // for (int i = 0; i < 4; i++)
-        // {
-        //     cv::line(mainMonopolyBoard, rectPoints[i], rectPoints[(i + 1) % 4], cv::Scalar(0, 255, 255), 2);
-        // }
 
         return center;
     }
@@ -407,7 +293,6 @@ cv::Point findAndDisplayPINKPostIt(cv::Mat mainMonopolyBoard, cv::Mat PINK_PostI
     //to determine where the mask is being applied
     // cv::rectangle(mainMonopolyBoard, maskRect, cv::Scalar(0, 0, 0), cv::FILLED);
 
-
     // Run template matching on the masked image
     cv::Point pinkPostItCenter = findPinkPostIt(maskedBoard, PINK_PostIt_Image, threshold);
 
@@ -420,12 +305,6 @@ cv::Point findAndDisplayPINKPostIt(cv::Mat mainMonopolyBoard, cv::Mat PINK_PostI
     }
     cv::Point intPoint = pinkPostItCenter; //convert cv::Point2f to cv::Point
     //above is new code for testing without chance card section
-    static int count = 0;
-    if (count == 0)
-    {
-        std::cout << "Pink Post-it Center: " << pinkPostItCenter << std::endl;
-        count++;
-    }
     return pinkPostItCenter;
 
 }
@@ -480,76 +359,23 @@ cv::Point findBeigePostIt(cv::Mat& mainMonopolyBoard, cv::Mat BEIGE_PostIt_Image
         cv::Point center(bestMatchLoc.x + bestMatchSize.width / 2.0,
                            bestMatchLoc.y + bestMatchSize.height / 2.0);
 
-        // std::cout << "Best match found at: " << bestMatchLoc
-        //           << " | Center: " << center
-        //           << " | Rotation: " << bestRotationAngle << ""
-        //           << " | Score: " << bestMatchScore << std::endl;
-
         // 🔹 Draw the Correctly Rotated Bounding Box
-        // cv::RotatedRect rotatedRect(center, bestMatchSize, bestRotationAngle);
-        // cv::Point2f rectPoints[4];
-        // rotatedRect.points(rectPoints);
-        //
-        // for (int i = 0; i < 4; i++)
-        // {
-        //     // cout <<"got to point " << rectPoints[i] << endl;
-        //     cv::line(mainMonopolyBoard, rectPoints[i], rectPoints[(i + 1) % 4], cv::Scalar(255, 0, 0), 2);
-        //     // cv::Rect debugRect(10, 10, 100, 60);  // x=10, y=10, width=100, height=60
-        //     // cv::rectangle(mainMonopolyBoard, debugRect, cv::Scalar(57, 150, 255), 4);
-        //     // display_video_frame(mainMonopolyBoard, 1, "Debug Rectangle");
-        // }
+        cv::RotatedRect rotatedRect(center, bestMatchSize, bestRotationAngle);
+        cv::Point2f rectPoints[4];
+        rotatedRect.points(rectPoints);
         return center;
     }
 }
 
-cv::Mat adjustImageBrightness(const cv::Mat& inputImage, double percentage)
-{
-    // Convert to HSV color space
-    cv::Mat hsvImage;
-    cv::cvtColor(inputImage, hsvImage, cv::COLOR_BGR2HSV);
-
-    // Split into H, S, V channels
-    std::vector<cv::Mat> hsvChannels;
-    cv::split(hsvImage, hsvChannels);
-
-    // Calculate brightness adjustment factor
-    double factor = 1.0 + (percentage / 100.0);
-
-    // Ensure factor stays positive to avoid inversion
-    factor = std::max(0.0, factor);  // if percentage = -100 → factor = 0
-
-    // Apply brightness scaling to V channel
-    hsvChannels[2].convertTo(hsvChannels[2], -1, factor, 0);
-
-    // Clip values to [0,255]
-    cv::threshold(hsvChannels[2], hsvChannels[2], 255, 255, cv::THRESH_TRUNC);
-
-    // Merge and convert back to BGR
-    cv::Mat brightenedHSV, outputImage;
-    cv::merge(hsvChannels, brightenedHSV);
-    cv::cvtColor(brightenedHSV, outputImage, cv::COLOR_HSV2BGR);
-
-    return outputImage;
-}
-
-
 
 cv::Point findAndDisplayBEIGEPostIt(cv::Mat mainMonopolyBoard, cv::Mat BEIGE_PostIt_Image, double threshold)
 {
-    // display_video_frame(BEIGE_PostIt_Image, 1, "Old Beige Post it");
-    // cv::Mat newBeigePostItImage = adjustImageBrightness(BEIGE_PostIt_Image, 40);
-    // display_video_frame(newBeigePostItImage, 1, "New beige post it ");
-    //below is original code but doesn't work with highly reflective surface
-    // cv::Mat lightingFixedBoard = equalizeBoardLighting(mainMonopolyBoard);
-    cv::Mat normalizedBoardLighting = equalizeLightingLABColor(mainMonopolyBoard);
-    // display_video_frame(normalizedBoardLighting, 1, "Lighting Fixed Board");
-    // cv::Point2f beigePostItCenter = findBeigePostIt(mainMonopolyBoard, BEIGE_PostIt_Image, threshold);
-    cv::Point beigePostItCenter = findBeigePostIt(normalizedBoardLighting , BEIGE_PostIt_Image, threshold);
+
+    cv::Point beigePostItCenter = findBeigePostIt(mainMonopolyBoard , BEIGE_PostIt_Image, threshold);
     cv::Point center(beigePostItCenter.x, beigePostItCenter.y);
     //NOTE: Beige Post it is COLOR MAGENTA!!!!
     cv::circle(mainMonopolyBoard, center, 10, cv::Scalar(255, 0, 255), -1);
     drawLabelAbovePoint(mainMonopolyBoard, "Player 2", beigePostItCenter, 0.5, 1, cv::Scalar(255, 0, 255));
-    //above is original code but doesn't work with highly reflective surface
     return beigePostItCenter;
 
 }
@@ -569,233 +395,7 @@ vector<cv::Point> findAllGamePieces(cv::Mat current_monopoly_board_image, cv::Ma
     return playerPositions;
 }
 
-void findHatPieceEdges(cv::Mat mainMonopolyBoard, cv::Mat gamePieceTemplate, double threshold = 0.8)
-{
-    //NOTE: in this state, this function doesn't work (I think because the threshold for edges
-    // apply to both the input template and the game board. I would need to find a 'perfect'
-    //template image of the edges hat piece, and then change the threshold on JUST the main board image
-    //to get an accurate detection of the hat piece in edge-form
 
-    // Convert both images to grayscale
-    cv::Mat board_gray, piece_gray;
-    cv::cvtColor(mainMonopolyBoard, board_gray, cv::COLOR_BGR2GRAY);
-    cv::cvtColor(gamePieceTemplate, piece_gray, cv::COLOR_BGR2GRAY);
-
-    // Apply Canny edge detection
-    cv::Mat board_edges, piece_edges;
-    cv::Canny(board_gray, board_edges, 50, 150);  // Adjust thresholds as needed
-    cv::Canny(piece_gray, piece_edges, 50, 150);  // Adjust thresholds as needed
-
-    // Perform template matching on edge images
-    cv::Mat result;
-    cv::matchTemplate(board_edges, piece_edges, result, cv::TM_CCOEFF_NORMED);
-
-    // Find the best match location
-    double minVal, maxVal;
-    cv::Point minLoc, maxLoc;
-    cv::minMaxLoc(result, &minVal, &maxVal, &minLoc, &maxLoc);
-
-    // Apply threshold to filter weak matches
-    if (maxVal >= threshold) {
-        cv::rectangle(mainMonopolyBoard, maxLoc,
-                      cv::Point(maxLoc.x + gamePieceTemplate.cols, maxLoc.y + gamePieceTemplate.rows),
-                      cv::Scalar(0, 255, 0), 3);
-        std::cout << "Hat piece detected at: " << maxLoc << std::endl;
-    } else {
-        std::cerr << "No strong match found! Try lowering the threshold." << std::endl;
-    }
-
-    // Show results
-    cv::imshow("Edge-Detected Board", board_edges);
-    cv::imshow("Edge-Detected Hat Piece", piece_edges);
-    cv::imshow("Detected Hat Piece", mainMonopolyBoard);
-    cv::waitKey(0);
-}
-
-
-
-cv::Mat equalizeLightingLAB(const cv::Mat& inputImage) {
-    // Convert to LAB color space
-    cv::Mat labImage;
-    cv::cvtColor(inputImage, labImage, cv::COLOR_BGR2Lab);
-
-    // Split LAB channels (L = brightness, A & B = color information)
-    std::vector<cv::Mat> labChannels;
-    cv::split(labImage, labChannels);
-
-    // Apply Otsu’s thresholding on the Luminance (L) channel (without blurring)
-    double otsuThreshold = cv::threshold(labChannels[0], labChannels[0], 0, 255, cv::THRESH_BINARY | cv::THRESH_OTSU);
-    std::cout << "Otsu Threshold for Luminance: " << otsuThreshold << std::endl;
-
-    // Normalize brightness in the L channel
-    cv::normalize(labChannels[0], labChannels[0], 0, 255, cv::NORM_MINMAX);
-
-    // Merge channels back
-    cv::Mat equalizedLAB;
-    cv::merge(labChannels, equalizedLAB);
-
-    // Convert back to BGR color space
-    cv::Mat equalizedImage;
-    cv::cvtColor(equalizedLAB, equalizedImage, cv::COLOR_Lab2BGR);
-
-    return equalizedImage;
-}
-
-
-cv::Mat adaptiveThresholdLAB(const cv::Mat& inputImage) {
-    // Convert to LAB color space
-    cv::Mat labImage;
-    cv::cvtColor(inputImage, labImage, cv::COLOR_BGR2Lab);
-
-    // Split channels (L = brightness, A & B = color)
-    std::vector<cv::Mat> labChannels;
-    cv::split(labImage, labChannels);
-
-    // Apply adaptive thresholding to the Luminance (L) channel
-    // cv::adaptiveThreshold(labChannels[0], labChannels[0], 255,
-    //                       cv::ADAPTIVE_THRESH_GAUSSIAN_C,
-    //                       cv::THRESH_BINARY, 11, 2);
-
-    cv::adaptiveThreshold(labChannels[0], labChannels[0], 255,
-                      cv::ADAPTIVE_THRESH_MEAN_C,  // <== Change from GAUSSIAN_C to MEAN_C
-                      cv::THRESH_BINARY, 3, 5);
-
-    // Merge channels back
-    cv::Mat processedLAB;
-    cv::merge(labChannels, processedLAB);
-
-    // Convert back to BGR
-    cv::Mat finalImage;
-    cv::cvtColor(processedLAB, finalImage, cv::COLOR_Lab2BGR);
-
-    return finalImage;
-}
-
-cv::Mat filterColorHSV(const cv::Mat& inputImage, cv::Scalar lowerBound, cv::Scalar upperBound) {
-    // Convert to HSV color space
-    cv::Mat hsvImage;
-    cv::cvtColor(inputImage, hsvImage, cv::COLOR_BGR2HSV);
-
-    // Create mask using the color range
-    cv::Mat mask;
-    cv::inRange(hsvImage, lowerBound, upperBound, mask);
-
-    // Apply the mask to keep only the desired colors
-    cv::Mat result;
-    cv::bitwise_and(inputImage, inputImage, result, mask);
-
-    return result;
-}
-
-
-
-cv::Mat filterShinyGrayHSV(const cv::Mat& inputImage) {
-    // Convert to HSV color space
-    cv::Mat hsvImage;
-    cv::cvtColor(inputImage, hsvImage, cv::COLOR_BGR2HSV);
-
-    // Define HSV range for shiny gray objects
-    //HSV; H = 0-180, S = 0-255, V = 0-255
-    cv::Scalar lowerGray(0, 0, 50);   // Dark gray
-    cv::Scalar upperGray(20, 255, 255); // Slightly shiny gray
-
-    // Create mask
-    cv::Mat mask;
-    cv::inRange(hsvImage, lowerGray, upperGray, mask);
-
-    // Apply mask to keep only the detected shiny gray objects
-    cv::Mat result;
-    cv::bitwise_and(inputImage, inputImage, result, mask);
-
-    return result;
-}
-
-void detectGamePieces(cv::Mat current_monopoly_board_image, cv::Mat PINK_PostIt_Image)
-{
-    //below does NOT work-------------------------------------------
-    // findGamePiece(cropped_main_monopoly_image, HAT_image, 0.15); //uses simple template matching in all color
-    // findHatPieceEdges(cropped_main_monopoly_image, HAT_image, 0.01); //uses edge detection for template matching
-    //cv::Mat equalizedImage = equalizeLightingLAB(cropped_main_monopoly_image);
-    //cv::Mat equalizedImage = adaptiveThresholdLAB(cropped_main_monopoly_image);
-    // cv::Mat equalizedImage = filterColorHSV(cropped_main_monopoly_image, lowerBlack, upperBlack);
-    //above does NOT work-------------------------------------------
-
-
-
-
-    //*************************************************************************************************************
-
-    // step 2: load in the current monopoly board that has the HAT game piece on it
-    // string current_monopoly_board_path = "../singleFrameOfPINK_PostIt_OnMonopolyBoard_LEFT_distorted.jpg";
-    // cv::Mat current_monopoly_board_image = cv::imread(current_monopoly_board_path, cv::IMREAD_COLOR);
-    //
-    // //step 3: undistort the current monopoly board image
-    // tuple<cv::Mat, cv::Mat> camera_values = findIntrinsicCameraMatrices();
-    // cv::Mat camera_matrix = get<0>(camera_values);
-    // cv::Mat dist_coeffs = get<1>(camera_values);
-    // cv::Mat undistorted_main_image;
-    // cv::undistort(current_monopoly_board_image, undistorted_main_image, camera_matrix, dist_coeffs);
-    //
-    // //step 4: crop out the background of the undistorted monopoly board image
-    // cv::Mat cropped_main_monopoly_image = crop_out_background(undistorted_main_image);
-    // display_image(cropped_main_monopoly_image, 0.5, "Cropped Monopoly Board");
-    // //step 5: now to try to detect the HAT game piece on the undistorted and cropped monopoly board image
-    // findAllGamePieces(cropped_main_monopoly_image, PINK_PostIt_Image);
-//*******************************************************************************************************************
-
-    // cv::Mat warped_thing = SIFT_forGameBoardAlignment(cropped_main_monopoly_image, HAT_image);
-    //BELOW IS FOR SIFT**************************************************************************************
-    // tuple<cv::Mat, cv::Point2f> result=SIFT_forGameBoardAlignment(cropped_main_monopoly_image, HAT_image);
-    // // tuple<cv::Mat, cv::Point2f> result = ORB_forGameBoardAlignment(cropped_main_monopoly_image, HAT_image);
-    // cv::Mat alignedBoard = std::get<0>(result);
-    // cv::Point2f matchCenter = std::get<1>(result);
-    // cout << "match center x: " + to_string(matchCenter.x) << endl;
-    // cout << "match center y: " + to_string(matchCenter.y) << endl;
-    //
-    // int rectSize = 20;  // Width and height of the rectangle
-    //
-    // // Get the top-left and bottom-right corners
-    // cv::Point topLeft(matchCenter.x - rectSize / 2, matchCenter.y - rectSize / 2);
-    // cv::Point bottomRight(matchCenter.x + rectSize / 2, matchCenter.y + rectSize / 2);
-    //
-    // // Draw the rectangle on the board image
-    // cv::rectangle(cropped_main_monopoly_image, topLeft, bottomRight, cv::Scalar(0, 255, 0), 2);  // Green rectangle
-    //
-    // // Show the image with the rectangle
-    // cv::imshow("Detected Center", cropped_main_monopoly_image);
-    // cv::waitKey(0);
-    //ABOVE IS FOR SIFT**************************************************************************************
-
-}
-
-cv::Point drawBoardCenterCrosshair(cv::Mat& boardImage)
-{
-    /*This function draws a crosshair at the center of the board image
-     *but isn't that useful, since most players sit at the four sides of the board, not at the corners
-     **/
-    // Step 1: Compute center of the image
-    int centerX = boardImage.cols / 2;
-    int centerY = boardImage.rows / 2;
-    cv::Point center(centerX, centerY);
-
-    // Step 2: Draw black dot at center
-    cv::circle(boardImage, center, 5, cv::Scalar(0, 0, 0), -1);  // Black dot
-
-    // Step 3: Vertical line
-    cv::line(boardImage,
-             cv::Point(centerX, 0),
-             cv::Point(centerX, boardImage.rows),
-             cv::Scalar(0, 0, 0), 2);
-
-    // Step 4: Horizontal line
-    cv::line(boardImage,
-             cv::Point(0, centerY),
-             cv::Point(boardImage.cols, centerY),
-             cv::Scalar(0, 0, 0), 2);
-
-    // Return the center
-    return center;
-}
 
 cv::Point drawVerticalCenterLine(cv::Mat& boardImage)
 {
@@ -816,10 +416,9 @@ cv::Point drawVerticalCenterLine(cv::Mat& boardImage)
 }
 
 
-
 cv::Point2f findTenDollarBill(cv::Mat mainMonopolyBoard, cv::Mat TenDollar_Image, double threshold)
 {
-    // Resize template to 1/6th of its original size
+    // Resize template
     cv::Mat resizedTemplate;
     double scaleFactor = 1.0 / 10;
     cv::resize(TenDollar_Image, resizedTemplate, cv::Size(), scaleFactor, scaleFactor, cv::INTER_LINEAR);
@@ -846,9 +445,6 @@ cv::Point2f findTenDollarBill(cv::Mat mainMonopolyBoard, cv::Mat TenDollar_Image
         cv::Point minLoc, maxLoc;
         cv::minMaxLoc(result, &minVal, &maxVal, &minLoc, &maxLoc);
 
-        // Debugging: Print match scores for different angles
-        // std::cout << "Angle: " << angle << " | Match score: " << maxVal << std::endl;
-
         // Check if this rotation is the best match so far
         if (maxVal > bestMatchScore)
         {
@@ -866,10 +462,6 @@ cv::Point2f findTenDollarBill(cv::Mat mainMonopolyBoard, cv::Mat TenDollar_Image
         cv::Point2f center(bestMatchLoc.x + bestMatchSize.width / 2.0,
                            bestMatchLoc.y + bestMatchSize.height / 2.0);
 
-        // std::cout << "Best match found at: " << bestMatchLoc
-        //           << " | Center: " << center
-        //           << " | Rotation: " << bestRotationAngle << "°"
-        //           << " | Score: " << bestMatchScore << std::endl;
 
         // 🔹 Draw the Correctly Rotated Bounding Box
         cv::RotatedRect rotatedRect(center, bestMatchSize, bestRotationAngle);
@@ -912,7 +504,6 @@ cv::Point findAndDisplayTenDollarBill(cv::Mat mainMonopolyBoard, cv::Mat TenDoll
     //to determine where the mask is being applied
     // cv::rectangle(mainMonopolyBoard, maskRect, cv::Scalar(0, 0, 0), cv::FILLED);
 
-    // cv::Mat normalizedBoardLighting = equalizeLightingLABColor(mainMonopolyBoard);
     cv::Point2f TenDollarCenter = findTenDollarBill(maskedBoard, TenDollar_Image, threshold);
     cv::Point2f center(TenDollarCenter.x, TenDollarCenter.y);
     //NOTE: TenDollarBill is COLOR GREEN!!!!
@@ -936,23 +527,16 @@ void determineIfMoneyHasBeenExchanged(cv::Mat mainMonopolyBoard, cv::Mat TenDoll
     //because i found that the best image was 658x660
     if (mainMonopolyBoard.cols > 656 && mainMonopolyBoard.rows > 658) //only track if you have a good image
     {
-        //TODO: Ryan, you need to probably find the center point of the image only in here
-        // so your algorithm doesn't get confused with the wrong center of the board
-        //cout << "good enough image to start tracking" << endl;
-
         //once the average location of the money, after 5 frames, is to the right of the center,
         //then we know the money has been exchanged
         if (counter < 5)
         {
             //only track up to 5 points at once
             trackedPoints.push_back({tenDollar_Center, "TEN_DOLLARS"});
-            // counter++;
-            // cout << "motherfucker";
         }
         else if (counter % 5 == 0) //update only every 5 frames
         {
             //delete the last point
-            // trackedPoints.pop_back();
             trackedPoints.erase(trackedPoints.begin());
             //add the new point
             trackedPoints.push_back({tenDollar_Center, "TEN_DOLLARS"});
@@ -968,9 +552,7 @@ void determineIfMoneyHasBeenExchanged(cv::Mat mainMonopolyBoard, cv::Mat TenDoll
             averageY = averageY / trackedPoints.size();
 
             cv::Point averageCenter(averageX, averageY);
-            //TODO: change below 'if statement' if i add more players
-            // cout << "average center: " << averageCenter << endl;
-            // cout << "current center: " << tenDollar_Center << endl;
+
             if (averageCenter.x > centerOfBoard.x && (previousAverageCenter.x < centerOfBoard.x))
             { //money went from left (alice) to right (bob)
                 // previousAverageCenter = averageCenter; //update previous average center
@@ -981,9 +563,8 @@ void determineIfMoneyHasBeenExchanged(cv::Mat mainMonopolyBoard, cv::Mat TenDoll
                 cout << "player 2 money" << player2.getMoney() << endl;
             }
             else if (averageCenter.x < centerOfBoard.x && (previousAverageCenter.x > centerOfBoard.x))
-            { //money went from right (bob) to left (alice)
-                //TODO: do this else if statement (note: this only works with two players so far)
-                // previousAverageCenter = averageCenter; //update previous average center
+            {
+                //money went from right (bob) to left (alice)
                 player1.addMoney(10);
                 player2.deductMoney(10);
                 cout << "Bob lost $10, and Alice gained $10!" << endl;
@@ -1003,15 +584,11 @@ void findWhatPropertyPlayersAreOn(cv::Mat mainMonopolyBoard, vector<cv::Point> p
     //now to find what properties each player is on
     cv::Point playerONE_position = playerPositions[0];
     cv::Point playerTWO_position = playerPositions[1];
-    // cout << "Player 1 position: " << playerONE_position << endl;
-    // cout << "Player 2 position: " << playerTWO_position << endl;
 
     if (mainMonopolyBoard.cols > idealColumnAmount && mainMonopolyBoard.rows > idealRowAmount)
     {
         //draw a white small vertical line at x = 160, y = 513
         //NOTE: Vermont Avenue x limits: 138 to 191; y limits: (550 to mainMonopolyBoard.rows)
-
-        //TODO: will need to manually check all four corners because they're not consistent
         struct BoardSectionBottom_struct
         {
             string name;
@@ -1019,7 +596,6 @@ void findWhatPropertyPlayersAreOn(cv::Mat mainMonopolyBoard, vector<cv::Point> p
             int rightmost_x;
             int topmost_y;
         };
-
 
         //below values were found from trial and error/testing and are hardcoded for my specific camera
 
@@ -1059,7 +635,6 @@ void findWhatPropertyPlayersAreOn(cv::Mat mainMonopolyBoard, vector<cv::Point> p
         }
         // cv::line(mainMonopolyBoard, cv::Point(564, 550), cv::Point(564, mainMonopolyBoard.rows), cv::Scalar(0, 0, 255), 2);
 
-
     }
 }
 
@@ -1093,9 +668,6 @@ cv::Point genericTemplateMatching(cv::Mat mainMonopolyBoard, cv::Mat templateIma
         cv::Point minLoc, maxLoc;
         cv::minMaxLoc(result, &minVal, &maxVal, &minLoc, &maxLoc);
 
-        // Debugging: Print match scores for different angles
-        // std::cout << "Angle: " << angle << " | Match score: " << maxVal << std::endl;
-
         // Check if this rotation is the best match so far
         if (maxVal > bestMatchScore)
         {
@@ -1112,11 +684,6 @@ cv::Point genericTemplateMatching(cv::Mat mainMonopolyBoard, cv::Mat templateIma
         // 🔹 Find the Center of the Best-Matched Template
         cv::Point center(bestMatchLoc.x + bestMatchSize.width / 2.0,
                            bestMatchLoc.y + bestMatchSize.height / 2.0);
-
-        // std::cout << "Best match found at: " << bestMatchLoc
-        //           << " | Center: " << center
-        //           << " | Rotation: " << bestRotationAngle << ""
-        //           << " | Score: " << bestMatchScore << std::endl;
 
 
         if (drawBoundingBox == true)
@@ -1136,20 +703,8 @@ cv::Point genericTemplateMatching(cv::Mat mainMonopolyBoard, cv::Mat templateIma
     }
 }
 
-int findDiceRoll(cv::Mat mainMonopolyBoard, vector<cv::Mat> allDiceImages)
-{
-    vector<int> angles = {0, 90, 180, 270};
-    vector<cv::Point> diceRollLocations;
-    for (int i = 0; i < allDiceImages.size(); i++)
-    {
-        diceRollLocations.push_back(genericTemplateMatching(mainMonopolyBoard, allDiceImages[i],
-            0.2, angles, 0.9, true));
-    }
-    return 5;
-}
-
 void liveVideoOfMonopolyBoard(cv::Mat main_monopoly_image, cv::Mat camera_matrix, cv::Mat dist_coeffs,
-    cv::Mat PINK_PostIt_Image, cv::Mat BEIGE_PostIt_Image, cv::Mat TenDollar_Image, vector<cv::Mat> allDiceImages , Player& player1, Player& player2)
+    cv::Mat PINK_PostIt_Image, cv::Mat BEIGE_PostIt_Image, cv::Mat TenDollar_Image, Player& player1, Player& player2)
 {
     //this will be the main loop that will run the game and display the game board
     cv::VideoCapture cap(CAMERA_INDEX);
@@ -1164,30 +719,19 @@ void liveVideoOfMonopolyBoard(cv::Mat main_monopoly_image, cv::Mat camera_matrix
     double Scale = 0.7;
     int current_frame_count = 0;
 
-    // string HAT = "../main_hat_picture_undistorted.jpg";
-    // cv::Mat gamePiece_HAT =  cv::imread(HAT, cv::IMREAD_COLOR);
     while (true) {
         current_frame_count++;
         cap >> currentFrame; // grab new video frame
-        // cv::Mat M;
-        //undistorts from wide-angle to normal/flat camera
         cv::undistort(currentFrame, undistorted_current_frame, camera_matrix, dist_coeffs);
-        // if (current_frame_count % 30 == 0) //try SIFT only once a second
-        // {
-        //     M = SIFT_forGameBoardAlignment(main_monopoly_image, undistorted_current_frame);
-        // }
+
         if (current_frame_count % 3 == 0) //only do SIFT every 3 frames because it is computationally expensive
         {
             // Warp the second image to align with the original board image
-            // cv::Mat warped_current_video_frame;
-            // cv::warpPerspective(undistorted_current_frame, warped_current_video_frame, M, main_monopoly_image.size());
-
             warped_current_video_frame = SIFT_forGameBoardAlignment(main_monopoly_image, undistorted_current_frame);
-            // display_video_frame(warped_current_video_frame, Scale, "Warped frame without cropping :D");
             cropped_board = crop_out_background(warped_current_video_frame);
             //need to rotate because SIFT changes the rotation
             cv::rotate(cropped_board, cropped_board, cv::ROTATE_90_COUNTERCLOCKWISE);
-            // // Display image size
+            // Display image size
             std::string sizeText = "Size: " + std::to_string(cropped_board.cols) + "x" + std::to_string(cropped_board.rows);
             cv::putText(cropped_board, sizeText, cv::Point(10, 50), cv::FONT_HERSHEY_SIMPLEX,
                         1.0, cv::Scalar(0, 255, 255), 1);
@@ -1197,8 +741,7 @@ void liveVideoOfMonopolyBoard(cv::Mat main_monopoly_image, cv::Mat camera_matrix
             cv::Point centerOfboard = drawVerticalCenterLine(cropped_board);
             determineIfMoneyHasBeenExchanged(cropped_board, TenDollar_Image, centerOfboard,
                 player1, player2);
-            findWhatPropertyPlayersAreOn(cropped_board, player_positions, player1, player2);
-            // // int current_dice_roll_number = findDiceRoll(cropped_board, allDiceImages);
+            findWhatProgipertyPlayersAreOn(cropped_board, player_positions, player1, player2);
         }
         display_video_frame(cropped_board, Scale, "Live Camera Feed");
 
@@ -1211,31 +754,6 @@ void liveVideoOfMonopolyBoard(cv::Mat main_monopoly_image, cv::Mat camera_matrix
 
 int main()
 {
-    //below is for testing----------------------------------------------------------
-
-    // takeASinglePicture(CAMERA_INDEX, "../singleBEIGE_PostIt_uncropped.jpg");
-    // takeASinglePicture(CAMERA_INDEX, "../singleFrameOfRED_PostIt_OnMonopolyBoard_LEFT_distorted.jpg");
-
-    // takeASinglePicture(CAMERA_INDEX, "../DICE_value_ONE_uncropped.jpg");
-    // return 0;
-    //above is for testing----------------------------------------------------------
-
-    // 1) note to myself: I still need to test the SIFT at 30FPS and make sure it doesn't lag
-    //      and if it does lag, then try only doing SIFT every 5 frames or something -- WORKS DOING SIFT EVERY 3 FRAMES
-    //TODO: 2) still need to take pictures of each of the game board pieces and see if SIFT can detect them
-    //TODO: 3) then if SIFT can detect the pieces, then need to find the locations (x,y) of each specific piece
-    //TODO: 4) then need to make some graphics on screen that will show the user the locations of each piece
-    //      relative to the game board so it becomes real-time tracking of game pieces
-
-    /* maybe try implementing background subtraction so when the game pieces are moved around
-    the pieces are shown as the foreground mask, which makes it easier to know the potential locations of the pieces
-    then can try doing template matching or SIFT to detect the pieces
-    */
-
-    //but first need to calibrate the camera so the board looks like a perfect rectangle
-    // findCameraDetails();
-
-    //below is main code for the game-------------------------------------------------------
 
     //Step 1: load in the camera intrinsics
     tuple<cv::Mat, cv::Mat> camera_values = findIntrinsicCameraMatrices();
@@ -1244,9 +762,7 @@ int main()
 
     //Step 2: load in main monopoly board template to use for SIFT (later)
     string main_monopoly_pic = "../updatedMainMonopolyImage.jpg";
-    // string scene_image = "../distorted_angled_main_monopoly_picture.jpg";
     cv::Mat main_monopoly_image = cv::imread(main_monopoly_pic, cv::IMREAD_COLOR);
-    // cv::Mat current_scene_image = cv::imread(scene_image, cv::IMREAD_COLOR);
 
     //Step 3: undistort the main monopoly board image template
     cv::Mat undistorted_main_image;
@@ -1275,13 +791,10 @@ int main()
     cout <<"Player 1: " << player1.getName() << ", starting Money: " << player1.getMoney() << ", position: " << player1.getCurrentPosition() << endl;
     cout <<"Player 2: " << player2.getName() << ", startingMoney: " << player2.getMoney() << ", position: " << player2.getCurrentPosition() << endl;
 
-    cv::Mat dice_ONE = cv::imread("../DICE_value_ONE_cropped.jpg", cv::IMREAD_COLOR);
-    vector<cv::Mat> allDiceImages;
-    allDiceImages.push_back(dice_ONE);
 
 
     liveVideoOfMonopolyBoard(cropped_main_monopoly_image, camera_matrix, dist_coeffs,
-        PINK_PostIt_Image, BEIGE_PostIt_Image, TenDollar_Image, allDiceImages, player1, player2);
+        PINK_PostIt_Image, BEIGE_PostIt_Image, TenDollar_Image, player1, player2);
 
     //above is main code for the game-------------------------------------------------------
     return 0;
