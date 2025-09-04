@@ -77,7 +77,7 @@ int main()
         }
         current_frame_index++;
     }
-    
+
     // Display final result
     if (!unwrappedMug.empty()) {
         display_image(unwrappedMug, 0.5, "Unwrapped Mug Texture");

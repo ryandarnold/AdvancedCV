@@ -1,5 +1,9 @@
 #include <iostream>
 #include <opencv2/opencv.hpp>
+#include <opencv2/dnn.hpp>
+#include <opencv2/imgproc.hpp>
+#include <opencv2/highgui.hpp>
+#include <fstream>
 #include "extraFunctions.h"
 #include <tuple>
 #include "Player.h" //"" for my own header files, <> for system header files
@@ -741,7 +745,7 @@ void liveVideoOfMonopolyBoard(cv::Mat main_monopoly_image, cv::Mat camera_matrix
             cv::Point centerOfboard = drawVerticalCenterLine(cropped_board);
             determineIfMoneyHasBeenExchanged(cropped_board, TenDollar_Image, centerOfboard,
                 player1, player2);
-            findWhatProgipertyPlayersAreOn(cropped_board, player_positions, player1, player2);
+            findWhatPropertyPlayersAreOn(cropped_board, player_positions, player1, player2);
         }
         display_video_frame(cropped_board, Scale, "Live Camera Feed");
 
@@ -752,8 +756,80 @@ void liveVideoOfMonopolyBoard(cv::Mat main_monopoly_image, cv::Mat camera_matrix
     cv::destroyAllWindows(); // Close OpenCV windows
 }
 
+static std::vector<std::string> loadNames(const std::string& p){
+    std::vector<std::string> n; std::ifstream f(p);
+    for (std::string s; std::getline(f, s);) if(!s.empty()) n.push_back(s);
+    return n;
+}
+
 int main()
 {
+    const std::string model = "assets/yolov5s_455.onnx";
+    const std::string namesPath = "assets/coco-labels-2014_2017.txt";
+    const std::string imgPath   = "assets/Multiple-School-Buses.jpg"; // any test image
+
+    cv::dnn::Net net = cv::dnn::readNetFromONNX(model);
+    net.setPreferableBackend(cv::dnn::DNN_BACKEND_OPENCV);
+    net.setPreferableTarget(cv::dnn::DNN_TARGET_CPU);
+
+    cv::Mat img = cv::imread(imgPath);
+    if (img.empty()) { std::cerr << "No image\n"; return 1; }
+
+    // Preprocess (simple resize to 640x640; good enough for a smoke test)
+    cv::Mat blob = cv::dnn::blobFromImage(img, 1/255.0, {640,640}, cv::Scalar(), true, false, CV_32F);
+    net.setInput(blob);
+
+    std::vector<cv::Mat> outs;
+    net.forward(outs, net.getUnconnectedOutLayersNames());   // outs[0]: 1x25200x85
+
+    const float confTh = 0.25f, nmsTh = 0.45f;
+    float xFac = img.cols / 640.0f, yFac = img.rows / 640.0f;
+
+    std::vector<int>    classIds, indices;
+    std::vector<float>  confidences;
+    std::vector<cv::Rect> boxes;
+
+    const float* data = (float*)outs[0].data;
+    for (int i = 0; i < 25200; ++i) {
+        float obj = data[4];
+        if (obj < confTh) { data += 85; continue; }
+
+        // best class
+        int   bestId = 0; float best = 0.f;
+        for (int c = 5; c < 85; ++c) if (data[c] > best){ best = data[c]; bestId = c - 5; }
+        float conf = obj * best;
+        if (conf >= confTh) {
+            float cx = data[0], cy = data[1], w = data[2], h = data[3];
+            int left = int((cx - 0.5f*w) * xFac);
+            int top  = int((cy - 0.5f*h) * yFac);
+            int ww   = int(w * xFac);
+            int hh   = int(h * yFac);
+            boxes.emplace_back(left, top, ww, hh);
+            confidences.push_back(conf);
+            classIds.push_back(bestId);
+        }
+        data += 85;
+    }
+
+    cv::dnn::NMSBoxes(boxes, confidences, confTh, nmsTh, indices);
+    auto names = loadNames(namesPath);
+
+    for (int idx : indices) {
+        cv::rectangle(img, boxes[idx], {0,255,0}, 2);
+        std::string label = (classIds[idx] < (int)names.size() ? names[classIds[idx]] : "obj")
+                            + cv::format(" %.2f", confidences[idx]);
+        cv::putText(img, label, boxes[idx].tl() + cv::Point(0,-3),
+                    cv::FONT_HERSHEY_SIMPLEX, 0.5, {0,255,0}, 2);
+    }
+
+    cv::imshow("YOLO test", img);
+    cv::waitKey();
+
+    return 0;
+
+
+
+
 
     //Step 1: load in the camera intrinsics
     tuple<cv::Mat, cv::Mat> camera_values = findIntrinsicCameraMatrices();
