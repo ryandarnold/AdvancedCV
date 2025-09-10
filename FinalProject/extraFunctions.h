@@ -19,5 +19,7 @@ void takeASinglePicture(int CAMERA_INDEX, string imageName);
 void takeASingleVideo(int CAMERA_INDEX);
 void gettingSingleFrameFromAngledVideo();
 void measureFPS(int CAMERA_INDEX);
+void simpleYOLOv5Detection(cv::Mat img);
+static std::vector<std::string> loadNames(const std::string& p);
 
 

@@ -4,15 +4,16 @@
 #include <opencv2/imgproc.hpp>
 #include <opencv2/highgui.hpp>
 #include <fstream>
-#include "extraFunctions.h"
+
 #include <tuple>
 #include "Player.h" //"" for my own header files, <> for system header files
+#include "extraFunctions.h"
 /*I have OpenCV version 4.5.5-dev
 */
 
 using namespace std;
 
-int CAMERA_INDEX = 0;
+int CAMERA_INDEX = 1;
 int idealColumnAmount = 656; //more than this!
 int idealRowAmount = 658; //more than this!
 
@@ -98,11 +99,14 @@ cv::Mat SIFT_forGameBoardAlignment(cv::Mat mainBoardTemplateImage, cv::Mat curre
         throw std::invalid_argument("Error: Homography computation failed!");
     }
 
-    // // Warp the second image to align with the original board image
-    cv::Mat aligned_scene;
-    cv::warpPerspective(currentFrameImage, aligned_scene, M, mainBoardTemplateImage.size());
+    return M; //return JUST the homography matrix so i can later do the warping in the main function
 
-    return aligned_scene; //works but is slow
+    // // Warp the second image to align with the original board image
+    //cv::Mat aligned_scene;
+    //cv::warpPerspective(currentFrameImage, aligned_scene, M, mainBoardTemplateImage.size());
+
+    //return aligned_scene; //works but is slow
+
 }
 
 
@@ -707,48 +711,64 @@ cv::Point genericTemplateMatching(cv::Mat mainMonopolyBoard, cv::Mat templateIma
     }
 }
 
+
+
+
+
 void liveVideoOfMonopolyBoard(cv::Mat main_monopoly_image, cv::Mat camera_matrix, cv::Mat dist_coeffs,
     cv::Mat PINK_PostIt_Image, cv::Mat BEIGE_PostIt_Image, cv::Mat TenDollar_Image, Player& player1, Player& player2)
 {
+
+
     //this will be the main loop that will run the game and display the game board
     cv::VideoCapture cap(CAMERA_INDEX);
     cap.set(cv::CAP_PROP_FRAME_WIDTH, 1024);
     cap.set(cv::CAP_PROP_FRAME_HEIGHT, 768); // worked very well
-    cap.set(cv::CAP_PROP_FPS, 30);
+    cap.set(cv::CAP_PROP_FPS, 60);
 
     cv::Mat currentFrame, undistorted_current_frame, warped_current_video_frame;
     cv::Mat cropped_board = cv::Mat::zeros(main_monopoly_image.rows, main_monopoly_image.cols, CV_8UC3);  // For a 3-channel image
 
-    cv::Mat M = cv::Mat::eye(3, 3, CV_32F);  // 3x3 identity matrix, double precision
+    //cv::Mat M = cv::Mat::eye(3, 3, CV_32F);  // 3x3 identity matrix, double precision
     double Scale = 0.7;
     int current_frame_count = 0;
-
+    cv::Mat M;
     while (true) {
-        current_frame_count++;
         cap >> currentFrame; // grab new video frame
         cv::undistort(currentFrame, undistorted_current_frame, camera_matrix, dist_coeffs);
 
-        if (current_frame_count % 3 == 0) //only do SIFT every 3 frames because it is computationally expensive
+        if (current_frame_count % 60 == 0) //only do SIFT every 3 frames because it is computationally expensive
         {
-            // Warp the second image to align with the original board image
-            warped_current_video_frame = SIFT_forGameBoardAlignment(main_monopoly_image, undistorted_current_frame);
-            cropped_board = crop_out_background(warped_current_video_frame);
-            //need to rotate because SIFT changes the rotation
-            cv::rotate(cropped_board, cropped_board, cv::ROTATE_90_COUNTERCLOCKWISE);
-            // Display image size
-            std::string sizeText = "Size: " + std::to_string(cropped_board.cols) + "x" + std::to_string(cropped_board.rows);
-            cv::putText(cropped_board, sizeText, cv::Point(10, 50), cv::FONT_HERSHEY_SIMPLEX,
-                        1.0, cv::Scalar(0, 255, 255), 1);
-            //
-            vector<cv::Point> player_positions = findAllGamePieces(cropped_board, PINK_PostIt_Image, BEIGE_PostIt_Image, player1, player2);
-
-            cv::Point centerOfboard = drawVerticalCenterLine(cropped_board);
-            determineIfMoneyHasBeenExchanged(cropped_board, TenDollar_Image, centerOfboard,
-                player1, player2);
-            findWhatPropertyPlayersAreOn(cropped_board, player_positions, player1, player2);
+            M = SIFT_forGameBoardAlignment(main_monopoly_image, undistorted_current_frame);
+            //cv::Mat warped_current_video_frame;
+            //cv::warpPerspective(undistorted_current_frame, warped_current_video_frame, M, main_monopoly_image.size());
         }
-        display_video_frame(cropped_board, Scale, "Live Camera Feed");
 
+        cv::warpPerspective(undistorted_current_frame, warped_current_video_frame, M, main_monopoly_image.size());
+        // Warp the second image to align with the original board image
+        //warped_current_video_frame = SIFT_forGameBoardAlignment(main_monopoly_image, undistorted_current_frame);
+        cropped_board = crop_out_background(warped_current_video_frame);
+        //need to rotate because SIFT changes the rotation
+        cv::rotate(cropped_board, cropped_board, cv::ROTATE_90_COUNTERCLOCKWISE);
+        // Display image size
+        std::string sizeText = "Size: " + std::to_string(cropped_board.cols) + "x" + std::to_string(cropped_board.rows);
+        cv::putText(cropped_board, sizeText, cv::Point(10, 50), cv::FONT_HERSHEY_SIMPLEX,
+                    1.0, cv::Scalar(0, 255, 255), 1);
+        //
+        //vector<cv::Point> player_positions = findAllGamePieces(cropped_board, PINK_PostIt_Image, BEIGE_PostIt_Image, player1, player2);
+
+        //cv::Point centerOfboard = drawVerticalCenterLine(cropped_board);
+        //determineIfMoneyHasBeenExchanged(cropped_board, TenDollar_Image, centerOfboard,
+        //player1, player2);
+        //findWhatPropertyPlayersAreOn(cropped_board, player_positions, player1, player2);
+
+
+
+        display_video_frame(cropped_board, Scale, "Live Camera Feed");
+        //display_video_frame(undistorted_current_frame, Scale, "Live Camera Feed");
+
+
+        current_frame_count++;
         if (int key = cv::waitKey(33); key >= 0) { break;} // displays at 30FPS
     }
 
@@ -756,80 +776,9 @@ void liveVideoOfMonopolyBoard(cv::Mat main_monopoly_image, cv::Mat camera_matrix
     cv::destroyAllWindows(); // Close OpenCV windows
 }
 
-static std::vector<std::string> loadNames(const std::string& p){
-    std::vector<std::string> n; std::ifstream f(p);
-    for (std::string s; std::getline(f, s);) if(!s.empty()) n.push_back(s);
-    return n;
-}
 
 int main()
 {
-    const std::string model = "assets/yolov5s_455.onnx";
-    const std::string namesPath = "assets/coco-labels-2014_2017.txt";
-    const std::string imgPath   = "assets/Multiple-School-Buses.jpg"; // any test image
-
-    cv::dnn::Net net = cv::dnn::readNetFromONNX(model);
-    net.setPreferableBackend(cv::dnn::DNN_BACKEND_OPENCV);
-    net.setPreferableTarget(cv::dnn::DNN_TARGET_CPU);
-
-    cv::Mat img = cv::imread(imgPath);
-    if (img.empty()) { std::cerr << "No image\n"; return 1; }
-
-    // Preprocess (simple resize to 640x640; good enough for a smoke test)
-    cv::Mat blob = cv::dnn::blobFromImage(img, 1/255.0, {640,640}, cv::Scalar(), true, false, CV_32F);
-    net.setInput(blob);
-
-    std::vector<cv::Mat> outs;
-    net.forward(outs, net.getUnconnectedOutLayersNames());   // outs[0]: 1x25200x85
-
-    const float confTh = 0.25f, nmsTh = 0.45f;
-    float xFac = img.cols / 640.0f, yFac = img.rows / 640.0f;
-
-    std::vector<int>    classIds, indices;
-    std::vector<float>  confidences;
-    std::vector<cv::Rect> boxes;
-
-    const float* data = (float*)outs[0].data;
-    for (int i = 0; i < 25200; ++i) {
-        float obj = data[4];
-        if (obj < confTh) { data += 85; continue; }
-
-        // best class
-        int   bestId = 0; float best = 0.f;
-        for (int c = 5; c < 85; ++c) if (data[c] > best){ best = data[c]; bestId = c - 5; }
-        float conf = obj * best;
-        if (conf >= confTh) {
-            float cx = data[0], cy = data[1], w = data[2], h = data[3];
-            int left = int((cx - 0.5f*w) * xFac);
-            int top  = int((cy - 0.5f*h) * yFac);
-            int ww   = int(w * xFac);
-            int hh   = int(h * yFac);
-            boxes.emplace_back(left, top, ww, hh);
-            confidences.push_back(conf);
-            classIds.push_back(bestId);
-        }
-        data += 85;
-    }
-
-    cv::dnn::NMSBoxes(boxes, confidences, confTh, nmsTh, indices);
-    auto names = loadNames(namesPath);
-
-    for (int idx : indices) {
-        cv::rectangle(img, boxes[idx], {0,255,0}, 2);
-        std::string label = (classIds[idx] < (int)names.size() ? names[classIds[idx]] : "obj")
-                            + cv::format(" %.2f", confidences[idx]);
-        cv::putText(img, label, boxes[idx].tl() + cv::Point(0,-3),
-                    cv::FONT_HERSHEY_SIMPLEX, 0.5, {0,255,0}, 2);
-    }
-
-    cv::imshow("YOLO test", img);
-    cv::waitKey();
-
-    return 0;
-
-
-
-
 
     //Step 1: load in the camera intrinsics
     tuple<cv::Mat, cv::Mat> camera_values = findIntrinsicCameraMatrices();
