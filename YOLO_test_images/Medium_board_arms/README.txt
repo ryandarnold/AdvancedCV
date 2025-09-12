@@ -8,4 +8,4 @@ These images are a medium-filled monopoly board and used
 4) Old, 30FPS camera at 1080p
 
 
-to take the images. It includes some images of houses and hotels, 3 player pieces (duck, car, cat), some money bills ( 10, 20, 50, 100), 1 chance, and 1 Vermont Avenue deed. also includes value (3) dice rolls 
+to take the images. It includes some images of houses and hotels, 3 player pieces (duck, car, cat), some money bills ( 10, 20, 50, 100), 1 chance, and 1 Vermont Avenue deed. also includes value (4) dice rolls 

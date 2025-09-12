@@ -721,7 +721,7 @@ void takePicsForTrainingAndTest(int current_frame_count, cv::Mat cropped_board, 
 
     if (cropped_board.empty()) return;
 
-    std::string path = cv::format("../../YOLO_test_images/Medium_board_arms/frame_%04d.jpg", saved_count++);
+    std::string path = cv::format("../../YOLO_test_images/Light_board_arms/frame_%04d.jpg", saved_count++);
     if (cv::imwrite(path, cropped_board)) {
         std::cout << "Saved: " << path << "\n";
 #ifdef _WIN32
