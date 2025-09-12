@@ -4,6 +4,9 @@
 #include <opencv2/imgproc.hpp>
 #include <opencv2/highgui.hpp>
 #include <fstream>
+#include <thread>
+#include <windows.h>
+#include <filesystem>
 
 #include <tuple>
 #include "Player.h" //"" for my own header files, <> for system header files
@@ -712,19 +715,46 @@ cv::Point genericTemplateMatching(cv::Mat mainMonopolyBoard, cv::Mat templateIma
 }
 
 
+void takePicsForTrainingAndTest(int current_frame_count, cv::Mat cropped_board, int& saved_count)
+{
+    //if ((current_frame_count % 30 == 0) && (current_frame_count < 600)) //save 5 images, once every 30 frames
 
+    if (cropped_board.empty()) return;
+
+    std::string path = cv::format("../../YOLO_test_images/Medium_board_arms/frame_%04d.jpg", saved_count++);
+    if (cv::imwrite(path, cropped_board)) {
+        std::cout << "Saved: " << path << "\n";
+#ifdef _WIN32
+        std::thread([]{ Beep(1500, 100); }).detach();  // short tick
+#endif
+    }
+
+
+    // (void)current_frame_count; // unused
+    //
+    // // Read a key (make sure you don't have another waitKey in the same loop)
+    // int key = cv::waitKey(1);
+    // if (key == 'y' || key == 'Y') {
+    //     if (cropped_board.empty()) return;
+    //
+    //     //../../YOLO_test_images/Filled_board/
+    //     std::string path = cv::format("../../YOLO_test_images/Filled_board/frame_%04d.jpg", saved_count++);
+    //     cv::imwrite(path, cropped_board);
+    //     std::cout << "Saved: " << path << "\n";
+    // }
+
+}
 
 
 void liveVideoOfMonopolyBoard(cv::Mat main_monopoly_image, cv::Mat camera_matrix, cv::Mat dist_coeffs,
     cv::Mat PINK_PostIt_Image, cv::Mat BEIGE_PostIt_Image, cv::Mat TenDollar_Image, Player& player1, Player& player2)
 {
 
-
     //this will be the main loop that will run the game and display the game board
     cv::VideoCapture cap(CAMERA_INDEX);
     cap.set(cv::CAP_PROP_FRAME_WIDTH, 1024);
     cap.set(cv::CAP_PROP_FRAME_HEIGHT, 768); // worked very well
-    cap.set(cv::CAP_PROP_FPS, 60);
+    cap.set(cv::CAP_PROP_FPS, 30); //amazon description said this camera can only output up to 30 FPS max
 
     cv::Mat currentFrame, undistorted_current_frame, warped_current_video_frame;
     cv::Mat cropped_board = cv::Mat::zeros(main_monopoly_image.rows, main_monopoly_image.cols, CV_8UC3);  // For a 3-channel image
@@ -733,15 +763,18 @@ void liveVideoOfMonopolyBoard(cv::Mat main_monopoly_image, cv::Mat camera_matrix
     double Scale = 0.7;
     int current_frame_count = 0;
     cv::Mat M;
+
+    //std::filesystem::create_directories("Empty Board Images");
+    int saved_count = 0;
+
+    int performSIFTthisAmountOfFrames = 60;
     while (true) {
         cap >> currentFrame; // grab new video frame
         cv::undistort(currentFrame, undistorted_current_frame, camera_matrix, dist_coeffs);
 
-        if (current_frame_count % 60 == 0) //only do SIFT every 3 frames because it is computationally expensive
+        if (current_frame_count % performSIFTthisAmountOfFrames == 0)
         {
             M = SIFT_forGameBoardAlignment(main_monopoly_image, undistorted_current_frame);
-            //cv::Mat warped_current_video_frame;
-            //cv::warpPerspective(undistorted_current_frame, warped_current_video_frame, M, main_monopoly_image.size());
         }
 
         cv::warpPerspective(undistorted_current_frame, warped_current_video_frame, M, main_monopoly_image.size());
@@ -752,8 +785,8 @@ void liveVideoOfMonopolyBoard(cv::Mat main_monopoly_image, cv::Mat camera_matrix
         cv::rotate(cropped_board, cropped_board, cv::ROTATE_90_COUNTERCLOCKWISE);
         // Display image size
         std::string sizeText = "Size: " + std::to_string(cropped_board.cols) + "x" + std::to_string(cropped_board.rows);
-        cv::putText(cropped_board, sizeText, cv::Point(10, 50), cv::FONT_HERSHEY_SIMPLEX,
-                    1.0, cv::Scalar(0, 255, 255), 1);
+        // cv::putText(cropped_board, sizeText, cv::Point(10, 50), cv::FONT_HERSHEY_SIMPLEX,
+        //             1.0, cv::Scalar(0, 255, 255), 1);
         //
         //vector<cv::Point> player_positions = findAllGamePieces(cropped_board, PINK_PostIt_Image, BEIGE_PostIt_Image, player1, player2);
 
@@ -762,14 +795,26 @@ void liveVideoOfMonopolyBoard(cv::Mat main_monopoly_image, cv::Mat camera_matrix
         //player1, player2);
         //findWhatPropertyPlayersAreOn(cropped_board, player_positions, player1, player2);
 
+        //takePicsForTrainingAndTest(current_frame_count, cropped_board, saved_count);
 
-
+        /* Display cropped board */
         display_video_frame(cropped_board, Scale, "Live Camera Feed");
-        //display_video_frame(undistorted_current_frame, Scale, "Live Camera Feed");
 
+        /* Display undistorted camera feed */
+        display_video_frame(undistorted_current_frame, Scale, "Raw, undistorted Camera Feed");
+        //display_video_frame(crop_out_background(warped_current_video_frame), Scale, "Warped Camera Feed");
 
         current_frame_count++;
-        if (int key = cv::waitKey(33); key >= 0) { break;} // displays at 30FPS
+        //if (int key = cv::waitKey(33); key >= 0) { break;} // displays at 30FPS
+        int key = cv::waitKey(33);
+        if (key >= 0) {
+            int k = key & 0xFF;              // normalize
+            if (k == 'y' || k == 'Y') {
+                takePicsForTrainingAndTest(current_frame_count, cropped_board, saved_count);
+            } else {
+                break;                       // any other key exits
+            }
+        }
     }
 
     cap.release(); // Release the camera
@@ -779,6 +824,22 @@ void liveVideoOfMonopolyBoard(cv::Mat main_monopoly_image, cv::Mat camera_matrix
 
 int main()
 {
+
+    // using clk = std::chrono::steady_clock;
+    //
+    // const int   FREQ_HZ   = 1500; // 880 original
+    // const int   DURATION  = 200;                 // tone length (ms)
+    // const auto  PERIOD    = std::chrono::seconds(2);  // beep every 2s
+    //
+    // std::cout << "Beeping every " << 2 << "s. Press Ctrl+C to quit.\n";
+    //
+    // auto next = clk::now();
+    // while (true) {
+    //     Beep(FREQ_HZ, DURATION);                 // plays through system speaker/output
+    //     next += PERIOD;
+    //     std::this_thread::sleep_until(next);     // precise pacing
+    // }
+    // return 0;
 
     //Step 1: load in the camera intrinsics
     tuple<cv::Mat, cv::Mat> camera_values = findIntrinsicCameraMatrices();
