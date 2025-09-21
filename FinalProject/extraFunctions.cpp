@@ -166,16 +166,28 @@ void takeASinglePicture(int CAMERA_INDEX, string imagePathANDnameANDextension)
     std::cout << "Current Height: " << cap.get(cv::CAP_PROP_FRAME_HEIGHT) << std::endl;
     std::cout << "Current FPS: " << cap.get(cv::CAP_PROP_FPS) << std::endl;
 
+    //NOTE: BELOW IS FOR OLD CAMERA
     // cap.set(cv::CAP_PROP_FRAME_WIDTH, 1920);
     // cap.set(cv::CAP_PROP_FRAME_HEIGHT, 1080); //best resolution but way too laggy for real-time detection
-    cap.set(cv::CAP_PROP_FRAME_WIDTH, 1024);
-    cap.set(cv::CAP_PROP_FRAME_HEIGHT, 768); // worked very well
-    cap.set(cv::CAP_PROP_FPS, 60);
+    // cap.set(cv::CAP_PROP_FRAME_WIDTH, 1024);
+    // cap.set(cv::CAP_PROP_FRAME_HEIGHT, 768); // worked very well
+    // cap.set(cv::CAP_PROP_FPS, 60);
+    //NOTE: ABOVE IS FOR OLD CAMERA
+
+
+    cap.set(cv::CAP_PROP_FRAME_WIDTH, 3840); //best
+    cap.set(cv::CAP_PROP_FRAME_HEIGHT, 2160);
+    cap.set(cv::CAP_PROP_FPS, 30);
+
+
+    // cap.set(cv::CAP_PROP_FRAME_WIDTH, 1000); //test
+    // cap.set(cv::CAP_PROP_FRAME_HEIGHT, 2160);
+    // cap.set(cv::CAP_PROP_FPS, 30);
 
 
     int imageCount = 1; // Counter for saved images
     cv::Mat frame;
-    double Scale = 0.5;
+    double Scale = 0.3;
     while (true) {
         cap >> frame; // new frame into frame matrix
 

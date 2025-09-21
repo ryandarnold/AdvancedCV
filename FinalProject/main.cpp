@@ -7,6 +7,7 @@
 #include <thread>
 #include <windows.h>
 #include <filesystem>
+// #include <opencv2/text.hpp>
 
 #include <tuple>
 #include "Player.h" //"" for my own header files, <> for system header files
@@ -15,6 +16,9 @@
 */
 
 using namespace std;
+
+using namespace cv;
+using namespace cv::dnn;
 
 int CAMERA_INDEX = 1;
 int idealColumnAmount = 656; //more than this!
@@ -822,24 +826,234 @@ void liveVideoOfMonopolyBoard(cv::Mat main_monopoly_image, cv::Mat camera_matrix
 }
 
 
+
+static std::vector<std::string> loadNames(const std::string& path) {
+    std::ifstream ifs(path);
+    std::vector<std::string> names;
+    std::string line;
+    while (std::getline(ifs, line)) if (!line.empty()) names.push_back(line);
+    return names;
+}
+
+// Letterbox resize like YOLOv5
+static Mat letterbox(const Mat& img, Size newShape, float& r, int& top, int& left) {
+    r = std::min(newShape.width / (float)img.cols, newShape.height / (float)img.rows);
+    int newUnpadW = (int)std::round(img.cols * r);
+    int newUnpadH = (int)std::round(img.rows * r);
+    Mat resized; resize(img, resized, Size(newUnpadW, newUnpadH));
+    int dw = newShape.width  - newUnpadW;
+    int dh = newShape.height - newUnpadH;
+    top = dh / 2; int bottom = dh - top;
+    left = dw / 2; int right  = dw - left;
+    Mat out; copyMakeBorder(resized, out, top, bottom, left, right, BORDER_CONSTANT, Scalar(114,114,114));
+    return out;
+}
+
+
+int RunYoloSanity(const std::string& modelPath,
+                  const std::string& namesPath,
+                  const std::string& imagesDir,
+                  float confThresh = 0.25f,
+                  float nmsThresh  = 0.45f) {
+    // Load names (should be 15 lines for your model)
+    auto names = loadNames(namesPath);
+    if (names.empty()) { std::cerr << "Failed to read class names: " << namesPath << "\n"; return 1; }
+
+    // Load ONNX
+    Net net = readNetFromONNX(modelPath);
+    net.setPreferableBackend(DNN_BACKEND_OPENCV);
+    net.setPreferableTarget(DNN_TARGET_CPU);  // MinGW + CPU
+
+    // Collect images
+    std::vector<cv::String> files;
+    glob(imagesDir + "/*.jpg", files, false);
+    std::vector<cv::String> pngs;
+    glob(imagesDir + "/*.png", pngs, false);
+    files.insert(files.end(), pngs.begin(), pngs.end());
+    if (files.empty()) { std::cerr << "No images found in: " << imagesDir << "\n"; return 1; }
+
+    // Output folder next to exe
+    std::string outDir = "outputs";
+    std::filesystem::create_directories(outDir);
+
+    for (const auto& f : files) {
+        Mat img = imread(f);
+        if (img.empty()) { std::cerr << "Cannot read image: " << f << "\n"; continue; }
+
+        // Preprocess
+        float r; int padTop, padLeft;
+        Mat padded = letterbox(img, Size(640,640), r, padTop, padLeft);
+        Mat blob = dnn::blobFromImage(padded, 1.0/255.0, Size(640,640), Scalar(), true, false);
+
+        net.setInput(blob);
+        Mat out;               // shape: [1, 25200, 5+num_classes] => here 5+15=20
+        net.forward(out);
+
+        // Make it easy to iterate rows
+        CV_Assert(out.dims == 3);
+        int nRows = out.size[1];
+        int nCols = out.size[2];
+        int numClasses = nCols - 5;
+
+        std::vector<Rect> boxes;
+        std::vector<float> confs;
+        std::vector<int> classIds;
+
+        const float* data = (float*)out.ptr<float>(0);
+        for (int i = 0; i < nRows; ++i) {
+            const float cx = data[0], cy = data[1], w = data[2], h = data[3];
+            const float obj = data[4];
+
+            // class scores start at data[5]
+            int maxId = 0; float maxScore = 0.f;
+            for (int c = 0; c < numClasses; ++c) {
+                float sc = data[5 + c];
+                if (sc > maxScore) { maxScore = sc; maxId = c; }
+            }
+            float conf = obj * maxScore;
+
+            if (conf >= confThresh) {
+                float x = cx - w/2.f;
+                float y = cy - h/2.f;
+
+                // Undo letterbox
+                float x0 = (x  - padLeft) / r;
+                float y0 = (y  - padTop ) / r;
+                float x1 = (x + w - padLeft) / r;
+                float y1 = (y + h - padTop ) / r;
+
+                // Clamp to image
+                x0 = std::max(0.f, std::min(x0, (float)img.cols-1));
+                y0 = std::max(0.f, std::min(y0, (float)img.rows-1));
+                x1 = std::max(0.f, std::min(x1, (float)img.cols-1));
+                y1 = std::max(0.f, std::min(y1, (float)img.rows-1));
+
+                Rect box(Point((int)std::round(x0), (int)std::round(y0)),
+                         Point((int)std::round(x1), (int)std::round(y1)));
+                if (box.area() > 0) {
+                    boxes.push_back(box);
+                    confs.push_back(conf);
+                    classIds.push_back(maxId);
+                }
+            }
+            data += nCols;
+        }
+
+        // NMS
+        std::vector<int> keep;
+        dnn::NMSBoxes(boxes, confs, confThresh, nmsThresh, keep);
+
+        // Draw
+        Mat vis = img.clone();
+        for (int idx : keep) {
+            rectangle(vis, boxes[idx], Scalar(0,255,0), 2);
+            std::ostringstream ss;
+            std::string name = (classIds[idx] >=0 && classIds[idx] < (int)names.size())
+                               ? names[classIds[idx]] : ("id:"+std::to_string(classIds[idx]));
+            ss << name << " " << std::fixed << std::setprecision(2) << confs[idx];
+            putText(vis, ss.str(), boxes[idx].tl() + Point(0,-3), FONT_HERSHEY_SIMPLEX, 0.6, Scalar(0,0,0), 3);
+            putText(vis, ss.str(), boxes[idx].tl() + Point(0,-3), FONT_HERSHEY_SIMPLEX, 0.6, Scalar(255,255,255), 1);
+        }
+
+        // Save
+        std::string base = std::filesystem::path(f).filename().string();
+        std::string outPath = outDir + "/" + base + "_det.jpg";
+        imwrite(outPath, vis);
+
+        std::cout << "Processed: " << f << "  -> " << outPath
+                  << "  (detections kept: " << keep.size() << ")\n";
+    }
+
+    std::cout << "Done. Check the 'outputs' folder next to the exe.\n";
+    return 0;
+}
+
 int main()
 {
+    //takeASinglePicture(CAMERA_INDEX, "../../../calibration_images_new_camera/test_image_uwu.jpg");
+    //return 0;
 
-    // using clk = std::chrono::steady_clock;
-    //
-    // const int   FREQ_HZ   = 1500; // 880 original
-    // const int   DURATION  = 200;                 // tone length (ms)
-    // const auto  PERIOD    = std::chrono::seconds(2);  // beep every 2s
-    //
-    // std::cout << "Beeping every " << 2 << "s. Press Ctrl+C to quit.\n";
-    //
-    // auto next = clk::now();
-    // while (true) {
-    //     Beep(FREQ_HZ, DURATION);                 // plays through system speaker/output
-    //     next += PERIOD;
-    //     std::this_thread::sleep_until(next);     // precise pacing
-    // }
+    cv::Mat img = cv::imread("sample.png");               // BGR image
+    if (img.empty()) return 1;
+
+    // Create OCR engine (uses defaults: datapath from TESSDATA_PREFIX, language "eng")
+    cv::Ptr<cv::text::OCRTesseract> ocr = cv::text::OCRTesseract::create();
+
+    std::string outText;
+    std::vector<cv::Rect> boxes;
+    std::vector<std::string> words;
+    std::vector<float> confidences;
+
+    // Optional: preprocess (grayscale / binarize) for better results
+    // cv::cvtColor(img, img, cv::COLOR_BGR2GRAY);
+
+    ocr->run(img, outText, &boxes, &words, &confidences);
+
+    std::cout << outText << std::endl;
+    return 0;
+
+
+
+
+
+    int cameraIndex = 1;
+
+
+    // Open camera
+    cv::VideoCapture cap(cameraIndex, cv::CAP_ANY);
+    if (!cap.isOpened()) {
+        std::cerr << "ERROR: Could not open camera index " << cameraIndex << "\n";
+        return 1;
+    }
+
+    // (Optional) Set capture properties — adjust as needed
+    cap.set(cv::CAP_PROP_FRAME_WIDTH, 1024);
+    cap.set(cv::CAP_PROP_FRAME_HEIGHT, 768);
+    cap.set(cv::CAP_PROP_FPS, 30);
+
+    // Display scale for preview (1.0 = no resize)
+    const double scale = 0.7;
+
+    cv::namedWindow("Camera (raw)", cv::WINDOW_AUTOSIZE);
+
+    while (true) {
+        cv::Mat frame;
+        if (!cap.read(frame) || frame.empty()) {
+            std::cerr << "ERROR: Failed to grab frame.\n";
+            break;
+        }
+
+        // Resize only for display (raw frame remains untouched)
+        cv::Mat display;
+        if (scale != 1.0) {
+            cv::resize(frame, display, cv::Size(), scale, scale, cv::INTER_LINEAR);
+        } else {
+            display = frame;
+        }
+
+        cv::imshow("Camera (raw)", display);
+
+        // Quit on ESC or 'q'/'Q'
+        int key = cv::waitKey(1);
+        if (key == 27 || key == 'q' || key == 'Q') break;
+    }
+
+    cap.release();
+    cv::destroyAllWindows();
+    return 0;
+
+
+
+
+
+    // TEMP: sanity test of custom YOLOv5 ONNX
+    // RunYoloSanity(
+    //     "assets/filled_board_no_arms_WEIGHTS_testing/monopoly_best.onnx",
+    //     "assets/filled_board_no_arms_WEIGHTS_testing/monopoly.names",
+    //     "assets/test/images"   // folder with your two test images
+    // );
     // return 0;
+
 
     //Step 1: load in the camera intrinsics
     tuple<cv::Mat, cv::Mat> camera_values = findIntrinsicCameraMatrices();
