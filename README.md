@@ -1,2 +1,2 @@
 # AdvancedCV
-Repository for CSCI 731 - Advanced CV
+Repository for Monopoly Board Object Detection 
