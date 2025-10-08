@@ -55,14 +55,15 @@ project(FinalProject LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Points to the folder that contains OpenCVConfig.cmake
+# If you keep your existing OpenCV install:
 set(OpenCV_DIR "C:/OpenCVforCplusplus/opencv/build")
-
-# ✅ Option A: request all needed components
 find_package(OpenCV REQUIRED COMPONENTS
         core imgproc highgui imgcodecs videoio dnn
         features2d calib3d flann
 )
+
+# Tesseract from vcpkg (toolchain flags set in CLion CMake options)
+find_package(Tesseract REQUIRED)
 
 message(STATUS "OpenCV version: ${OpenCV_VERSION}")
 message(STATUS "OpenCV libs: ${OpenCV_LIBS}")
@@ -74,32 +75,46 @@ add_executable(FinalProject
         Player.cpp
 )
 
+# Includes & linking
 target_include_directories(FinalProject PRIVATE ${OpenCV_INCLUDE_DIRS})
-target_link_libraries(FinalProject PRIVATE ${OpenCV_LIBS})
+target_compile_definitions(FinalProject PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
 
-if (WIN32)
-    target_compile_definitions(FinalProject PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
-endif()
+target_link_libraries(FinalProject PRIVATE
+        ${OpenCV_LIBS}
+        Tesseract::libtesseract
+)
 
+# Copy your assets
 add_custom_command(TARGET FinalProject POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_directory
         "${CMAKE_SOURCE_DIR}/assets"
-        "$<TARGET_FILE_DIR:FinalProject>/assets")
+        "$<TARGET_FILE_DIR:FinalProject>/assets"
+)
 
-if (WIN32 AND DEFINED OpenCV_DIR)
-    set(_opencv_bins
-            "${OpenCV_DIR}/x64/mingw/bin"
-            "${OpenCV_DIR}/bin"
-            "${OpenCV_DIR}/x64/mingw/lib")
-    foreach(_b ${_opencv_bins})
-        if (EXISTS "${_b}")
-            add_custom_command(TARGET FinalProject POST_BUILD
-                    COMMAND ${CMAKE_COMMAND} -E copy_directory "${_b}" "$<TARGET_FILE_DIR:FinalProject>"
-                    COMMENT "Copying OpenCV runtime from ${_b}")
-            break()
-        endif()
-    endforeach()
-endif()
+# (Optional) Copy OpenCV runtime DLLs if your current OpenCV_DIR is used
+#if (WIN32 AND DEFINED OpenCV_DIR)
+#    set(_opencv_bins
+#            "${OpenCV_DIR}/x64/mingw/bin"
+#            "${OpenCV_DIR}/bin"
+#            "${OpenCV_DIR}/x64/mingw/lib")
+#    foreach(_b ${_opencv_bins})
+#        if (EXISTS "${_b}")
+#            add_custom_command(TARGET FinalProject POST_BUILD
+#                    COMMAND ${CMAKE_COMMAND} -E copy_directory "${_b}" "$<TARGET_FILE_DIR:FinalProject>"
+#                    COMMENT "Copying OpenCV runtime from ${_b}")
+#            break()
+#        endif()
+#    endforeach()
+#endif()
+
+# Copy vcpkg runtime DLLs (Tesseract/Leptonica) next to the .exe
+add_custom_command(TARGET FinalProject POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "C:/dev/vcpkg/installed/x64-mingw-dynamic/bin"
+        "$<TARGET_FILE_DIR:FinalProject>"
+        COMMENT "Copying Tesseract/Leptonica runtime DLLs"
+)
+
 
 
 

@@ -37,7 +37,7 @@ void findCameraDetails()
 
     // Load calibration images
     std::vector<cv::String> images;
-    cv::glob("../../../calibration_images/*.jpg", images);  // Ensure images are in this folder
+    cv::glob("../../../calibration_images_new_camera/*.jpg", images);  // Ensure images are in this folder
 
     cv::Mat frame, gray;
     for (const auto& img_file : images)
@@ -89,7 +89,7 @@ void findCameraDetails()
     std::cout << "Distortion Coefficients:\n" << dist_coeffs << std::endl;
 
     // Save calibration results
-    cv::FileStorage fs("../camera_calibration.yml", cv::FileStorage::WRITE);
+    cv::FileStorage fs("../NEW_CAMERA_camera_calibration.yml", cv::FileStorage::WRITE);
     fs << "CameraMatrix" << camera_matrix;
     fs << "DistCoeffs" << dist_coeffs;
     fs.release();
@@ -100,7 +100,7 @@ tuple<cv::Mat, cv::Mat> findIntrinsicCameraMatrices()
     //This function loads the camera matrix and distortion coefficients from a file
 
     // Load calibration parameters
-    cv::FileStorage fs("../camera_calibration.yml", cv::FileStorage::READ);
+    cv::FileStorage fs("../NEW_CAMERA_camera_calibration.yml", cv::FileStorage::READ);
     cv::Mat camera_matrix, dist_coeffs;
     fs["CameraMatrix"] >> camera_matrix;
     fs["DistCoeffs"] >> dist_coeffs;

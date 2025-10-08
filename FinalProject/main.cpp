@@ -7,7 +7,12 @@
 #include <thread>
 #include <windows.h>
 #include <filesystem>
+#include <tesseract/baseapi.h>
+#include <leptonica/allheaders.h>
 // #include <opencv2/text.hpp>
+#include <cstdio>
+#include <string>
+#include <stdexcept>
 
 #include <tuple>
 #include "Player.h" //"" for my own header files, <> for system header files
@@ -20,7 +25,7 @@ using namespace std;
 using namespace cv;
 using namespace cv::dnn;
 
-int CAMERA_INDEX = 1;
+int CAMERA_INDEX = 0;
 int idealColumnAmount = 656; //more than this!
 int idealRowAmount = 658; //more than this!
 
@@ -117,7 +122,7 @@ cv::Mat SIFT_forGameBoardAlignment(cv::Mat mainBoardTemplateImage, cv::Mat curre
 }
 
 
-
+bool did_crop_once = false; //threshold values might be different for main cropped image vs. current image frame
 cv::Mat crop_out_background(cv::Mat current_frame)
 {
     // Convert to grayscale for edge detection
@@ -126,7 +131,21 @@ cv::Mat crop_out_background(cv::Mat current_frame)
 
     // Apply thresholding to get binary image
     cv::Mat binary;
-    cv::threshold(gray, binary, 100, 255, cv::THRESH_BINARY);
+    int threshold;
+    if (did_crop_once == false)
+    {
+        threshold = 15; //15 was found to be good for the first cropping
+        did_crop_once = true;
+        cv::threshold(gray, binary, threshold, 255, cv::THRESH_BINARY);
+        //display_image(gray, 0.3, "Gray image from perfect picture Contour Detection");
+    }
+    else
+    {
+        threshold = 6; //this value needs to change (I think) depending on the lighting conditions of each enviornment
+        cv::threshold(gray, binary, threshold, 255, cv::THRESH_BINARY);
+        //display_image(gray, 0.3, "Current Frame Gray Image for Contour Detection");
+    }
+
 
     // Find contours of the image using binary image
     std::vector<std::vector<cv::Point>> contours; //vector of vector of points that are contours
@@ -725,7 +744,7 @@ void takePicsForTrainingAndTest(int current_frame_count, cv::Mat cropped_board, 
 
     if (cropped_board.empty()) return;
 
-    std::string path = cv::format("../../YOLO_test_images/Light_board_arms/frame_%04d.jpg", saved_count++);
+    std::string path = cv::format("../../Monopoly_Board_Game_High_Resolution/filled_board_arms/frame_%04d.jpg", saved_count++);
     if (cv::imwrite(path, cropped_board)) {
         std::cout << "Saved: " << path << "\n";
 #ifdef _WIN32
@@ -756,15 +775,18 @@ void liveVideoOfMonopolyBoard(cv::Mat main_monopoly_image, cv::Mat camera_matrix
 
     //this will be the main loop that will run the game and display the game board
     cv::VideoCapture cap(CAMERA_INDEX);
-    cap.set(cv::CAP_PROP_FRAME_WIDTH, 1024);
-    cap.set(cv::CAP_PROP_FRAME_HEIGHT, 768); // worked very well
-    cap.set(cv::CAP_PROP_FPS, 30); //amazon description said this camera can only output up to 30 FPS max
+    // cap.set(cv::CAP_PROP_FRAME_WIDTH, 1024);
+    // cap.set(cv::CAP_PROP_FRAME_HEIGHT, 768); // worked very well
+    // cap.set(cv::CAP_PROP_FPS, 30); //amazon description said this camera can only output up to 30 FPS max
+    cap.set(cv::CAP_PROP_FRAME_WIDTH, 3840); //new camera
+    cap.set(cv::CAP_PROP_FRAME_HEIGHT, 2160);
+    cap.set(cv::CAP_PROP_FPS, 30);
 
     cv::Mat currentFrame, undistorted_current_frame, warped_current_video_frame;
     cv::Mat cropped_board = cv::Mat::zeros(main_monopoly_image.rows, main_monopoly_image.cols, CV_8UC3);  // For a 3-channel image
 
     //cv::Mat M = cv::Mat::eye(3, 3, CV_32F);  // 3x3 identity matrix, double precision
-    double Scale = 0.7;
+    double Scale = 0.3;
     int current_frame_count = 0;
     cv::Mat M;
 
@@ -772,6 +794,7 @@ void liveVideoOfMonopolyBoard(cv::Mat main_monopoly_image, cv::Mat camera_matrix
     int saved_count = 0;
 
     int performSIFTthisAmountOfFrames = 60;
+
     while (true) {
         cap >> currentFrame; // grab new video frame
         cv::undistort(currentFrame, undistorted_current_frame, camera_matrix, dist_coeffs);
@@ -786,7 +809,7 @@ void liveVideoOfMonopolyBoard(cv::Mat main_monopoly_image, cv::Mat camera_matrix
         //warped_current_video_frame = SIFT_forGameBoardAlignment(main_monopoly_image, undistorted_current_frame);
         cropped_board = crop_out_background(warped_current_video_frame);
         //need to rotate because SIFT changes the rotation
-        cv::rotate(cropped_board, cropped_board, cv::ROTATE_90_COUNTERCLOCKWISE);
+        //cv::rotate(cropped_board, cropped_board, cv::ROTATE_90_COUNTERCLOCKWISE);
         // Display image size
         std::string sizeText = "Size: " + std::to_string(cropped_board.cols) + "x" + std::to_string(cropped_board.rows);
         // cv::putText(cropped_board, sizeText, cv::Point(10, 50), cv::FONT_HERSHEY_SIMPLEX,
@@ -809,16 +832,27 @@ void liveVideoOfMonopolyBoard(cv::Mat main_monopoly_image, cv::Mat camera_matrix
         //display_video_frame(crop_out_background(warped_current_video_frame), Scale, "Warped Camera Feed");
 
         current_frame_count++;
-        //if (int key = cv::waitKey(33); key >= 0) { break;} // displays at 30FPS
-        int key = cv::waitKey(33);
-        if (key >= 0) {
-            int k = key & 0xFF;              // normalize
-            if (k == 'y' || k == 'Y') {
-                takePicsForTrainingAndTest(current_frame_count, cropped_board, saved_count);
-            } else {
-                break;                       // any other key exits
-            }
-        }
+        //if (int key = cv::waitKey(25); key >= 0) { break;} // displays at 30FPS
+        int key = cv::waitKey(33); // ~30FPS
+        // if (key >= 0)
+        // {
+        //     int k = key & 0xFF;              // normalize
+        //     if (k == 'b' || k == 'B')
+        //     {
+        //         break;
+        //         // takePicsForTrainingAndTest(current_frame_count, cropped_board, saved_count);
+        //     }
+        //         // break;                       // any other key exits
+        // }
+        //takePicsForTrainingAndTest(current_frame_count, cropped_board, saved_count);
+         if (key >= 0) {
+             int k = key & 0xFF;              // normalize
+             if (k == 'y' || k == 'Y') {
+                 takePicsForTrainingAndTest(current_frame_count, cropped_board, saved_count);
+             } else {
+                 break;                       // any other key exits
+             }
+         }
     }
 
     cap.release(); // Release the camera
@@ -968,81 +1002,91 @@ int RunYoloSanity(const std::string& modelPath,
     return 0;
 }
 
+
+std::string ocr_with_tesseract_cli(const std::string& image_path,
+                                   const std::string& lang = "eng",
+                                   int psm = 6) {
+    namespace fs = std::filesystem;
+
+    const std::string exe = R"(C:\Program Files\Tesseract-OCR\tesseract.exe)";
+    const std::string data = R"(C:\Program Files\Tesseract-OCR\tessdata)";
+
+    if (!fs::exists(exe)) throw std::runtime_error("tesseract.exe not found: " + exe);
+    if (!fs::exists(image_path)) throw std::runtime_error("image not found: " + image_path);
+    if (!fs::exists(data)) throw std::runtime_error("tessdata dir not found: " + data);
+
+    // Inner command with proper quoting
+    std::string inner;
+    inner += "\""; inner += exe; inner += "\" ";
+    inner += "--tessdata-dir \"" + data + "\" ";
+    inner += "\"" + image_path + "\" stdout -l " + lang + " --psm " + std::to_string(psm);
+
+    // Wrap with cmd to execute a quoted path; capture stderr too
+    std::string cmd = "cmd /S /C \"" + inner + " 2>&1\"";
+
+    std::string out; char buf[4096];
+    if (FILE* p = _popen(cmd.c_str(), "r")) {
+        while (fgets(buf, sizeof buf, p)) out += buf;
+        int rc = _pclose(p);
+        if (rc != 0) throw std::runtime_error("tesseract rc=" + std::to_string(rc) + "\n" + out);
+        return out;
+    }
+    throw std::runtime_error("failed to start tesseract");
+}
+
+
 int main()
 {
-    //takeASinglePicture(CAMERA_INDEX, "../../../calibration_images_new_camera/test_image_uwu.jpg");
-    //return 0;
 
-    cv::Mat img = cv::imread("sample.png");               // BGR image
-    if (img.empty()) return 1;
 
-    // Create OCR engine (uses defaults: datapath from TESSDATA_PREFIX, language "eng")
-    cv::Ptr<cv::text::OCRTesseract> ocr = cv::text::OCRTesseract::create();
-
-    std::string outText;
-    std::vector<cv::Rect> boxes;
-    std::vector<std::string> words;
-    std::vector<float> confidences;
-
-    // Optional: preprocess (grayscale / binarize) for better results
-    // cv::cvtColor(img, img, cv::COLOR_BGR2GRAY);
-
-    ocr->run(img, outText, &boxes, &words, &confidences);
-
-    std::cout << outText << std::endl;
-    return 0;
+    // findCameraDetails();
+    // return 0;
+    // takeASinglePicture(CAMERA_INDEX, "../../../calibration_images_new_camera/chessboard20.jpg");
+    // return 0;
 
 
 
+    // Mat img = imread("../community_chest_for_sharpening.jpg", IMREAD_COLOR);
+    // cv::Mat blur, detail, sharp;
+    //
+    // double sigma = 1.0;          // 0.8–2.0 typical
+    // double amount = 1.0;         // 0.5–2.0 typical
+    // int threshold = 5;           // 0–20; raise to avoid sharpening flat/noisy areas
+    //
+    // cv::GaussianBlur(img, blur, cv::Size(0,0), sigma);
+    // cv::Mat img_f, blur_f, sharp_f;
+    // img.convertTo(img_f, CV_32F);
+    // blur.convertTo(blur_f, CV_32F);
+    //
+    // cv::Mat detail_f = img_f - blur_f;
+    //
+    // // Optional: mask out tiny differences (noise)
+    // if (threshold > 0) {
+    //     cv::Mat mag; cv::absdiff(img, blur, mag);
+    //     std::vector<cv::Mat> ch; cv::split(mag, ch);
+    //     cv::Mat m = ch.size()==1 ? ch[0] : (0.299*ch[2] + 0.587*ch[1] + 0.114*ch[0]);
+    //     cv::Mat mask; cv::threshold(m, mask, threshold, 1.0, cv::THRESH_BINARY);
+    //     cv::multiply(detail_f, mask, detail_f);
+    // }
+    //
+    // sharp_f = img_f + amount * detail_f;
+    // sharp_f.convertTo(sharp, CV_8U);   // clips to 0..255
+    //
+    // imwrite("../sharpened_community_chest_test.jpg", sharp);    // or PNG to avoid JPEG artifacts
+    // return 0;
 
 
-    int cameraIndex = 1;
+    // try {
+    //     std::string txt = ocr_with_tesseract_cli(R"(C:\Users\RyanA\OneDrive\Pictures\testingRYAN.jpg)", "eng", 6);
+    //     std::cout << txt << "\n";
+    // } catch (const std::exception& e) {
+    //     std::cerr << "OCR error:\n" << e.what() << "\n";
+    // }
+    // return 0;
 
 
-    // Open camera
-    cv::VideoCapture cap(cameraIndex, cv::CAP_ANY);
-    if (!cap.isOpened()) {
-        std::cerr << "ERROR: Could not open camera index " << cameraIndex << "\n";
-        return 1;
-    }
-
-    // (Optional) Set capture properties — adjust as needed
-    cap.set(cv::CAP_PROP_FRAME_WIDTH, 1024);
-    cap.set(cv::CAP_PROP_FRAME_HEIGHT, 768);
-    cap.set(cv::CAP_PROP_FPS, 30);
-
-    // Display scale for preview (1.0 = no resize)
-    const double scale = 0.7;
-
-    cv::namedWindow("Camera (raw)", cv::WINDOW_AUTOSIZE);
-
-    while (true) {
-        cv::Mat frame;
-        if (!cap.read(frame) || frame.empty()) {
-            std::cerr << "ERROR: Failed to grab frame.\n";
-            break;
-        }
-
-        // Resize only for display (raw frame remains untouched)
-        cv::Mat display;
-        if (scale != 1.0) {
-            cv::resize(frame, display, cv::Size(), scale, scale, cv::INTER_LINEAR);
-        } else {
-            display = frame;
-        }
-
-        cv::imshow("Camera (raw)", display);
-
-        // Quit on ESC or 'q'/'Q'
-        int key = cv::waitKey(1);
-        if (key == 27 || key == 'q' || key == 'Q') break;
-    }
-
-    cap.release();
-    cv::destroyAllWindows();
-    return 0;
-
-
+    // takeASinglePicture(CAMERA_INDEX, "../NEW_CAMERA_updatedMainMonopolyImage.jpg");
+    // return 0;
 
 
 
@@ -1059,9 +1103,14 @@ int main()
     tuple<cv::Mat, cv::Mat> camera_values = findIntrinsicCameraMatrices();
     cv::Mat camera_matrix = get<0>(camera_values);
     cv::Mat dist_coeffs = get<1>(camera_values);
+    // cv::Mat camera_matrix = cv::Mat::eye(3, 3, CV_64F);
+    // cv::Mat dist_coeffs = cv::Mat::zeros(1, 5, CV_64F);
+
+
+
 
     //Step 2: load in main monopoly board template to use for SIFT (later)
-    string main_monopoly_pic = "../updatedMainMonopolyImage.jpg";
+    string main_monopoly_pic = "../NEW_CAMERA_updatedMainMonopolyImage.jpg";
     cv::Mat main_monopoly_image = cv::imread(main_monopoly_pic, cv::IMREAD_COLOR);
 
     //Step 3: undistort the main monopoly board image template
@@ -1070,6 +1119,9 @@ int main()
 
     //Step 4: crop out the background of the undistorted monopoly board image so the whole image is just monopoly board
     cv::Mat cropped_main_monopoly_image = crop_out_background(undistorted_main_image);
+    //display_image(cropped_main_monopoly_image, 0.3, "Cropped Main Monopoly Board Image");
+
+    //return 0;
 
     //Step 5: load in the game piece templates
     //load in PINK post it piece
